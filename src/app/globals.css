@@ -1,0 +1,307 @@
+@import "tailwindcss";
+
+:root {
+  /* Jobak Design System — Linear-inspired */
+  
+  /* Backgrounds */
+  --bg-canvas: #08090a;
+  --bg-panel: #0f1011;
+  --bg-surface: #191a1b;
+  --bg-elevated: #1f2122;
+  --bg-secondary: #28282c;
+
+  /* Foregrounds */
+  --fg-primary: #f7f8f8;
+  --fg-secondary: #d0d6e0;
+  --fg-tertiary: #8a8f98;
+  --fg-quaternary: #62666d;
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-standard: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Electric green — career growth */
+  --accent: oklch(0.82 0.20 145);
+  --accent-bright: oklch(0.88 0.22 145);
+  --accent-dim: oklch(0.55 0.13 145);
+  --accent-bg: oklch(0.82 0.20 145 / 0.10);
+  --accent-bg-strong: oklch(0.82 0.20 145 / 0.18);
+  --accent-text: oklch(0.92 0.16 145);
+  
+  /* Warm tint for friendly feel */
+  --warm-tint: oklch(0.85 0.04 70);
+
+  /* Status colors */
+  --status-amber: oklch(0.82 0.16 75);
+  --status-rose: oklch(0.72 0.16 20);
+
+  /* Legacy Tailwind compat */
+  --background: #08090a;
+  --foreground: #f7f8f8;
+}
+
+@theme inline {
+  --color-background: var(--bg-canvas);
+  --color-foreground: var(--fg-primary);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  
+  /* Extended Tailwind colors for design system */
+  --color-bg-canvas: var(--bg-canvas);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-secondary: var(--bg-secondary);
+  
+  --color-fg-primary: var(--fg-primary);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-fg-quaternary: var(--fg-quaternary);
+  
+  --color-border-subtle: var(--border-subtle);
+  --color-border-standard: var(--border-standard);
+  --color-border-strong: var(--border-strong);
+  
+  --color-accent: var(--accent);
+  --color-accent-bright: var(--accent-bright);
+  --color-accent-text: var(--accent-text);
+  
+  /* Additional theme colors for UI components */
+  --color-primary: var(--fg-primary);
+  --color-primary-foreground: var(--bg-canvas);
+  --color-muted-foreground: var(--fg-tertiary);
+  --color-secondary: var(--bg-secondary);
+  --color-secondary-foreground: var(--fg-primary);
+  --font-display: var(--font-geist-sans);
+}
+
+html {
+  font-feature-settings: "cv01", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-canvas);
+  color: var(--fg-primary);
+  overflow-x: hidden;
+}
+
+.font-display {
+  font-family: var(--font-geist-sans);
+}
+
+@layer utilities {
+  /* Animated gradient background */
+  @keyframes aurora {
+    0%, 100% {
+      opacity: 0.4;
+      transform: translate(0, 0) scale(1);
+  }
+  33% {
+    opacity: 0.6;
+    transform: translate(30%, -20%) scale(1.1);
+  }
+  66% {
+    opacity: 0.5;
+    transform: translate(-20%, 30%) scale(0.95);
+  }
+}
+
+@keyframes aurora-reverse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    opacity: 0.5;
+    transform: translate(-30%, 20%) scale(1.05);
+  }
+  66% {
+    opacity: 0.4;
+    transform: translate(20%, -30%) scale(0.9);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animation utilities */
+.animate-aurora {
+  animation: aurora 20s ease-in-out infinite;
+}
+
+.animate-aurora-reverse {
+  animation: aurora-reverse 25s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.8s ease-out forwards;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+}
+
+/* Utility scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@layer utilities {
+/* Additional design system utilities */
+.text-stroke {
+  -webkit-text-stroke: 1.5px currentColor;
+  -webkit-text-fill-color: transparent;
+}
+
+.marquee {
+  animation: marquee 30s linear infinite;
+}
+
+.marquee-reverse {
+  animation: marquee-reverse 25s linear infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes marquee-reverse {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+.line-reveal {
+  clip-path: inset(0 100% 0 0);
+  animation: line-reveal 0.8s cubic-bezier(0.77, 0, 0.175, 1) forwards;
+}
+
+@keyframes line-reveal {
+  to { clip-path: inset(0 0 0 0); }
+}
+
+.hover-lift {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+}
+
+.letter-spin {
+  display: inline-block;
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.letter-spin:hover {
+  transform: rotateY(360deg);
+}
+
+.animate-char-in {
+  animation: char-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+  filter: blur(40px);
+  transform: translateY(100%);
+}
+
+@keyframes char-in {
+  0% {
+    opacity: 0;
+    filter: blur(40px);
+    transform: translateY(100%);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+.noise-overlay {
+  position: relative;
+}
+
+.noise-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.border-sketch {
+  border: 1px solid transparent;
+  background: 
+    linear-gradient(var(--bg-canvas), var(--bg-canvas)) padding-box,
+    linear-gradient(135deg, var(--fg-primary) 25%, transparent 25%, transparent 50%, var(--fg-primary) 50%, var(--fg-primary) 75%, transparent 75%) border-box;
+  background-size: 100% 100%, 8px 8px;
+  border-radius: 10px;
+}
+}

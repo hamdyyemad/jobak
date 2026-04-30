@@ -1,0 +1,73 @@
+{
+  "name": "jobak",
+  "version": "0.1.0",
+  "description": "An AI-powered job-matching platform that helps users find highly relevant job opportunities based on their preferences. Integrates with n8n for automated job discovery and AI-based filtering.",
+  "keywords": [
+    "job-search",
+    "ai-job-finder",
+    "job-matching",
+    "career",
+    "employment",
+    "remote-jobs",
+    "n8n",
+    "ai-powered",
+    "grok-api",
+    "job-recommendation",
+    "automation",
+    "nextjs",
+    "react"
+  ],
+  "homepage": "https://github.com/hamdyyemad/jobak#readme",
+  "bugs": {
+    "url": "https://github.com/hamdyyemad/jobak/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hamdyyemad/jobak.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Hamdy Emad",
+    "email": "hamdy.emad@aol.com"
+  },
+  "private": false,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.9.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "dev": "next dev",
+    "prepare": "husky",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.14.0",
+    "next": "16.2.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.4",
+    "husky": "^9.1.7",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss@<8.5.10": ">=8.5.10"
+    }
+  }
+}
