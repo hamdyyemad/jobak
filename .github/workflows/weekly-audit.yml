@@ -1,0 +1,153 @@
+name: Weekly Dependency Audit
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    # Allows manual runs from the Actions tab (see README section on testing)
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect
+        run: |
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "manager=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ]; then
+            echo "manager=npm" >> "$GITHUB_OUTPUT"
+          elif [ -f "yarn.lock" ]; then
+            echo "manager=yarn" >> "$GITHUB_OUTPUT"
+          else
+            echo "manager=none" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Detected manager: $(cat "$GITHUB_OUTPUT" | grep manager)"
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.manager != 'none'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          # version read from package.json "packageManager" field
+
+      - name: Get pnpm store directory
+        if: steps.detect.outputs.manager == 'pnpm'
+        id: pnpm-cache
+        run: |
+          mkdir -p ~/.pnpm-store
+          echo "path=$(pnpm store path --silent || echo ~/.pnpm-store)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies (pnpm)
+        if: steps.detect.outputs.manager == 'pnpm'
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
+
+      - name: Install dependencies (npm)
+        if: steps.detect.outputs.manager == 'npm'
+        run: npm ci --ignore-scripts
+
+      - name: Run audit
+        id: audit
+        if: steps.detect.outputs.manager != 'none'
+        run: |
+          set +e
+          case "${{ steps.detect.outputs.manager }}" in
+            pnpm)
+              pnpm audit --json > audit.json
+              EXIT=$?
+              ;;
+            npm)
+              npm audit --json > audit.json
+              EXIT=$?
+              ;;
+            yarn)
+              # yarn v1 doesn't output npm-compatible JSON; use npm against the lockfile import
+              npm install --package-lock-only --ignore-scripts > /dev/null 2>&1 || true
+              npm audit --json > audit.json
+              EXIT=$?
+              ;;
+          esac
+          # Both npm and pnpm exit non-zero when vulnerabilities exist; we still want the JSON.
+          echo "audit_exit=$EXIT" >> "$GITHUB_OUTPUT"
+          # Validate it's parseable JSON; otherwise emit an error stub
+          if ! jq empty audit.json 2>/dev/null; then
+            echo '{"error":"audit-failed-to-produce-json"}' > audit.json
+          fi
+          echo "--- audit.json (first 500 chars) ---"
+          head -c 500 audit.json
+          echo
+          exit 0
+
+      - name: Build payload
+        id: payload
+        if: steps.detect.outputs.manager != 'none'
+        run: |
+          # Wrap audit result with repo metadata so n8n has context
+          jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg owner "${{ github.repository_owner }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg commit "${{ github.sha }}" \
+            --arg manager "${{ steps.detect.outputs.manager }}" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg scanned_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --slurpfile audit audit.json \
+            '{
+              repo: $repo,
+              owner: $owner,
+              branch: $branch,
+              commit: $commit,
+              manager: $manager,
+              run_id: $run_id,
+              run_url: $run_url,
+              scanned_at: $scanned_at,
+              audit: $audit[0]
+            }' > payload.json
+          echo "Payload size: $(wc -c < payload.json) bytes"
+
+      - name: Send to n8n webhook
+        if: steps.detect.outputs.manager != 'none'
+        env:
+          N8N_WEBHOOK_URL: ${{ secrets.N8N_AUDIT_WEBHOOK_URL }}
+          N8N_AUDIT_SECRET: ${{ secrets.N8N_AUDIT_SECRET }}
+        run: |
+          if [ -z "$N8N_WEBHOOK_URL" ] || [ -z "$N8N_AUDIT_SECRET" ]; then
+            echo "::error::Missing N8N_AUDIT_WEBHOOK_URL or N8N_AUDIT_SECRET secret"
+            exit 1
+          fi
+          HTTP_CODE=$(curl -sS -o response.txt -w "%{http_code}" \
+            -X POST "$N8N_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Audit-Secret: $N8N_AUDIT_SECRET" \
+            --data-binary @payload.json)
+          echo "n8n responded with HTTP $HTTP_CODE"
+          cat response.txt
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "::error::n8n webhook returned $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Skip notice
+        if: steps.detect.outputs.manager == 'none'
+        run: echo "::notice::No lockfile found (pnpm-lock.yaml / package-lock.json / yarn.lock). Skipping audit."

@@ -1,0 +1,60 @@
+# Single CI workflow for both staging and main.
+# Same checks on both branches so staging stays green before you merge to main.
+
+name: CI
+
+on:
+  push:
+    branches: [staging, main]
+  pull_request:
+    branches: [staging, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+        env:
+          BACKEND_BASE_URL: https://placeholder.example.com
+          NEXT_PUBLIC_BASE_URL: https://placeholder.example.com
+      # - name: Test (unit)
+      #   run: pnpm run test:unit
+
+      # - name: Install Playwright browsers
+      #   run: pnpm exec playwright install --with-deps
+
+      # - name: E2E Smoke Journey
+      #   run: pnpm run test:e2e -- tests/e2e/smoke.spec.ts
+      #   env:
+      #     # Backend / frontend URLs for tests
+      #     BACKEND_BASE_URL: http://localhost:3000
+      #     NEXT_PUBLIC_BASE_URL: http://localhost:3000
+
+      #     # Test user credentials – configure these as GitHub Actions secrets
+      #     TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      #     TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
