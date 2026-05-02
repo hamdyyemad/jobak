@@ -23,7 +23,7 @@ export const steps: Step[] = [
   {
     number: "II",
     title: "AI scrapes & ranks",
-    description: "Our n8n workflow hits LinkedIn, Indeed, RemoteOK, Wuzzuf and more — then Grok AI scores every listing against your profile.",
+    description: "Our n8n workflow hits LinkedIn, Indeed, RemoteOK, Wuzzuf and more — then Groq AI scores every listing against your profile.",
     code: `// Scraping 6 sources in parallel...
 ✓ LinkedIn Jobs        → 142 results
 ✓ Indeed              → 87 results

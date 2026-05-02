@@ -17,7 +17,7 @@ import { stepTitles, stepDescriptions } from "@/frontend/components/protected/on
 export default function OnboardingPage() {
   const { data, updateData } = useOnboardingForm();
   const { step, totalSteps, progress, handleNext, handleBack, isFirstStep, isLastStep } = useOnboardingStep();
-  const { isSubmitting, handleSubmit } = useOnboardingSubmit();
+  const { isSubmitting, error: submitError, handleSubmit } = useOnboardingSubmit();
 
   return (
     <div className="min-h-screen flex flex-col bg-(--bg-canvas)">
@@ -82,6 +82,12 @@ export default function OnboardingPage() {
               apiKey={data.apiKey}
               onUpdate={updateData}
             />
+          )}
+
+          {submitError && (
+            <div className="mt-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+              {submitError}
+            </div>
           )}
 
           <OnboardingNavigation
