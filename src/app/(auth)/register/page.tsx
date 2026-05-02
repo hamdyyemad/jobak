@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Eye, EyeOff, Check } from "lucide-react";
 import { AuthLayout } from "@/frontend/components/auth/auth-layout";
 import { AuthInput } from "@/frontend/components/auth/auth-input";
+import { signUp } from "@/backend/actions/auth";
 
 const passwordRules = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -15,13 +16,21 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    // TODO: wire up auth
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const firstName = fd.get("firstName") as string;
+    const lastName = fd.get("lastName") as string;
+    fd.set("fullName", `${firstName} ${lastName}`.trim());
+    const result = await signUp(fd);
+    if (result?.error) {
+      setError(result.error);
+      setLoading(false);
+    }
   }
 
   return (
@@ -38,10 +47,16 @@ export default function RegisterPage() {
         </div>
 
         {/* Form */}
+        {error && (
+          <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <AuthInput
               label="First name"
+              name="firstName"
               type="text"
               placeholder="Sarah"
               autoComplete="given-name"
@@ -49,6 +64,7 @@ export default function RegisterPage() {
             />
             <AuthInput
               label="Last name"
+              name="lastName"
               type="text"
               placeholder="Kim"
               autoComplete="family-name"
@@ -58,6 +74,7 @@ export default function RegisterPage() {
 
           <AuthInput
             label="Email"
+            name="email"
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
@@ -74,6 +91,7 @@ export default function RegisterPage() {
             <div className="relative">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 autoComplete="new-password"

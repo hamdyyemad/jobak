@@ -1,0 +1,16 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0f1011" stroke="rgba(255,255,255,0.10)" />
+  
+  <!-- Sun arc - upper-right quarter circle -->
+  <path d="M32 18 a14 14 0 0 1 14 14" stroke="#58E68C" strokeWidth="3" strokeLinecap="round" fill="none" />
+  
+  <!-- Sun disc -->
+  <circle cx="32" cy="32" r="6" fill="#58E68C" opacity="0.9" />
+  
+  <!-- Horizon line - primary -->
+  <path d="M10 42 H54" stroke="#58E68C" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
+  
+  <!-- Horizon line - secondary / reflection -->
+  <path d="M14 48 H50" stroke="#58E68C" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
+</svg>

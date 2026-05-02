@@ -27,7 +27,7 @@ export const features: Feature[] = [
     {
         number: "04",
         title: "Secure & Private",
-        description: "Your Grok API key is encrypted before storage and never shared. Your job preferences stay yours — we never sell your data.",
+        description: "Your Groq API key is encrypted before storage and never shared. Your job preferences stay yours — we never sell your data.",
         visual: "security",
     },
 ];

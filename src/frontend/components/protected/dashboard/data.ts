@@ -17,6 +17,7 @@ export const SOURCE_COLORS: Record<Source, string> = {
     RemoteOK: "bg-green-500/10 text-green-400 border-green-500/20",
     Wuzzuf: "bg-orange-500/10 text-orange-400 border-orange-500/20",
     Glassdoor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    Remotive: "bg-teal-500/10 text-teal-400 border-teal-500/20",
 };
 
-export const SOURCES: (Source | "all")[] = ["all", "LinkedIn", "Indeed", "RemoteOK", "Wuzzuf", "Glassdoor"];
+export const SOURCES: (Source | "all")[] = ["all", "LinkedIn", "Indeed", "RemoteOK", "Wuzzuf", "Glassdoor", "Remotive"];

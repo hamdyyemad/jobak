@@ -15,18 +15,18 @@ export function StepApiKey({ apiKey, onUpdate }: StepApiKeyProps) {
   return (
     <div className="space-y-5">
       <div>
-        <label className="block text-sm font-medium mb-2 text-fg-secondary">Grok API Key</label>
+        <label className="block text-sm font-medium mb-2 text-fg-secondary">Groq API Key</label>
         <input
           type="password"
           value={apiKey}
           onChange={(e) => handleApiKeyChange(e.target.value)}
-          placeholder="xai-..."
+          placeholder="gsk_..."
           className={inputClass + " font-mono text-sm"}
         />
         <p className="mt-2 text-xs text-(--fg-tertiary)">
           Don&apos;t have one?{" "}
-          <a href="https://x.ai" target="_blank" rel="noopener noreferrer" className="text-accent-text hover:underline">
-            Get your key at x.ai
+          <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-accent-text hover:underline">
+            Get your key at console.groq.com
           </a>
         </p>
       </div>

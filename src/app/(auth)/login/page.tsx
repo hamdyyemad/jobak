@@ -4,17 +4,22 @@ import { useState } from "react";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { AuthLayout } from "@/frontend/components/auth/auth-layout";
 import { AuthInput } from "@/frontend/components/auth/auth-input";
+import { signIn } from "@/backend/actions/auth";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    // TODO: wire up auth
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
+    setError(null);
+    const result = await signIn(new FormData(e.currentTarget));
+    if (result?.error) {
+      setError(result.error);
+      setLoading(false);
+    }
   }
 
   return (
@@ -31,9 +36,15 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
+        {error && (
+          <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <AuthInput
             label="Email"
+            name="email"
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
@@ -58,6 +69,7 @@ export default function LoginPage() {
             <div className="relative">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 autoComplete="current-password"
