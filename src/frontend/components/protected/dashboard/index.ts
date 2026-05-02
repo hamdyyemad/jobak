@@ -1,5 +1,3 @@
-export { DashboardHeader } from "./dashboard-header";
-export { DashboardStats } from "./dashboard-stats";
 export { JobFilters } from "./job-filters";
 export { JobList } from "./job-list";
 export { JobCard } from "./job-card";
