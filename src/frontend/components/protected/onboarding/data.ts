@@ -35,7 +35,7 @@ export const stepDescriptions = [
     "Tell us your profession and the skills you bring.",
     "Define your ideal job type and seniority level.",
     "Help us filter opportunities within your range.",
-    "Provide your Grok API key to power personalized matching.",
+    "Provide your Groq API key to power personalized matching.",
 ];
 
 export const currencyOptions = [
