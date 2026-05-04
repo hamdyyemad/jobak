@@ -133,7 +133,7 @@ function executeCommand(command: Command, input?: string) {
     );
 
     try {
-        execSync(fullCommand, { stdio: "inherit", shell: true });
+        execSync(fullCommand, { stdio: "inherit" });
         console.log(
             `\n${colors.green}✓ Command completed successfully${colors.reset}\n`
         );
