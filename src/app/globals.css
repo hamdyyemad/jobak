@@ -262,35 +262,66 @@ body {
   transform: rotateY(360deg);
 }
 
+/*
+ * Per-character animations run on dozens of elements at once, so they stay on
+ * opacity/transform only — a blur() filter here forces an expensive re-raster
+ * of every single character on every frame.
+ */
 .animate-char-in {
   animation: char-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   opacity: 0;
-  filter: blur(40px);
   transform: translateY(100%);
 }
 
 @keyframes char-in {
   0% {
     opacity: 0;
-    filter: blur(40px);
     transform: translateY(100%);
   }
   100% {
     opacity: 1;
-    filter: blur(0);
     transform: translateY(0);
   }
+}
+
+/* How-it-works code preview — one animation per line, not per character */
+.code-line-reveal {
+  opacity: 0;
+  transform: translateX(-8px);
+  animation: code-line-reveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes code-line-reveal {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.progress-bar {
+  animation: progress-bar 5s linear forwards;
+}
+
+@keyframes progress-bar {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 .noise-overlay {
   position: relative;
 }
 
+/*
+ * Fixed + tiled rather than absolute + stretched: the rasterised area stays one
+ * viewport instead of growing with page height, and it never repaints on scroll.
+ */
 .noise-overlay::after {
   content: '';
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  background-repeat: repeat;
   opacity: 0.03;
   pointer-events: none;
   z-index: 1;
@@ -298,10 +329,25 @@ body {
 
 .border-sketch {
   border: 1px solid transparent;
-  background: 
+  background:
     linear-gradient(var(--bg-canvas), var(--bg-canvas)) padding-box,
     linear-gradient(135deg, var(--fg-primary) 25%, transparent 25%, transparent 50%, var(--fg-primary) 50%, var(--fg-primary) 75%, transparent 75%) border-box;
   background-size: 100% 100%, 8px 8px;
   border-radius: 10px;
 }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -29,19 +29,3 @@ export function CtaCard() {
     </div>
   );
 }
-
-interface MouseSpotlightProps {
-  x: number;
-  y: number;
-}
-
-function MouseSpotlight({ x, y }: MouseSpotlightProps) {
-  return (
-    <div
-      className="absolute inset-0 opacity-10 pointer-events-none transition-opacity duration-300"
-      style={{
-        background: `radial-gradient(600px circle at ${x}% ${y}%, rgba(0,0,0,0.15), transparent 40%)`,
-      }}
-    />
-  );
-}
