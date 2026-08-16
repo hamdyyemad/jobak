@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
 import { encryptGroqKey } from "@/backend/lib/crypto/groq-key";
+import { toUserMessage, logServerError, isConnectionError } from "@/backend/lib/errors";
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,10 +56,10 @@ export async function POST(request: NextRequest) {
       );
 
     if (upsertError) {
-      console.error("Failed to save preferences:", upsertError);
+      logServerError("webhook/job-search:upsert", upsertError);
       return NextResponse.json(
-        { error: "Failed to save preferences" },
-        { status: 500 }
+        { error: toUserMessage(upsertError, "We couldn't save your preferences. Please try again.") },
+        { status: isConnectionError(upsertError) ? 503 : 500 }
       );
     }
 
@@ -113,13 +114,11 @@ export async function POST(request: NextRequest) {
       message: "Onboarding complete. Job search started.",
     });
   } catch (error) {
-    console.error("Webhook route error:", error);
+    // Never echo the raw message back — it exposes hostnames and internals.
+    logServerError("webhook/job-search", error);
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown",
-      },
-      { status: 500 }
+      { error: toUserMessage(error, "We couldn't save your preferences. Please try again.") },
+      { status: isConnectionError(error) ? 503 : 500 }
     );
   }
 }

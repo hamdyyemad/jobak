@@ -3,52 +3,81 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
+import { toUserMessage, logServerError } from "@/backend/lib/errors";
 
 async function getOnboardingDestination(userId: string): Promise<"/onboarding" | "/dashboard"> {
-  const service = createServiceClient();
-  const { data } = await service
-    .from("user_preferences")
-    .select("onboarding_completed")
-    .eq("user_id", userId)
-    .single();
+  try {
+    const service = createServiceClient();
+    const { data } = await service
+      .from("user_preferences")
+      .select("onboarding_completed")
+      .eq("user_id", userId)
+      .single();
 
-  return data?.onboarding_completed ? "/dashboard" : "/onboarding";
+    return data?.onboarding_completed ? "/dashboard" : "/onboarding";
+  } catch (error) {
+    // Sign-in already succeeded — send them to onboarding rather than fail the login
+    logServerError("getOnboardingDestination", error);
+    return "/onboarding";
+  }
 }
 
+const SIGN_UP_FALLBACK = "We couldn't create your account. Please try again.";
+
 export async function signUp(formData: FormData) {
-  const supabase = await createClient();
+  // NOTE: redirect() throws NEXT_REDIRECT by design, so it must stay outside the
+  // try/catch or it would be swallowed and reported as a failure.
+  try {
+    const supabase = await createClient();
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const fullName = (formData.get("fullName") as string) || "";
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const fullName = (formData.get("fullName") as string) || "";
 
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name: fullName } },
-  });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName } },
+    });
 
-  if (error) {
-    return { error: error.message };
+    if (error) {
+      logServerError("signUp", error);
+      return { error: toUserMessage(error, SIGN_UP_FALLBACK) };
+    }
+  } catch (error) {
+    logServerError("signUp", error);
+    return { error: toUserMessage(error, SIGN_UP_FALLBACK) };
   }
 
   // New users always go to onboarding
   redirect("/onboarding");
 }
 
+const SIGN_IN_FALLBACK = "We couldn't sign you in. Please try again.";
+
 export async function signIn(formData: FormData) {
-  const supabase = await createClient();
+  let destination: "/onboarding" | "/dashboard";
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  try {
+    const supabase = await createClient();
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
-  if (error) {
-    return { error: error.message };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      logServerError("signIn", error);
+      return { error: toUserMessage(error, SIGN_IN_FALLBACK) };
+    }
+
+    destination = await getOnboardingDestination(data.user.id);
+  } catch (error) {
+    logServerError("signIn", error);
+    return { error: toUserMessage(error, SIGN_IN_FALLBACK) };
   }
 
-  const destination = await getOnboardingDestination(data.user.id);
+  // Outside the try/catch — redirect() signals by throwing
   redirect(destination);
 }
 
