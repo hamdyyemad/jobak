@@ -9,7 +9,12 @@ import { NavLogo } from "./nav-logo";
 
 import { landingNavLinks as navLinks } from "@/frontend/lib";
 
-export function MobileNavigation({ isScrolled }: { isScrolled: boolean }) {
+interface MobileNavigationProps {
+  isScrolled: boolean;
+  isAuthenticated: boolean;
+}
+
+export function MobileNavigation({ isScrolled, isAuthenticated }: MobileNavigationProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   // Prevent scrolling when menu is open
@@ -45,12 +50,20 @@ export function MobileNavigation({ isScrolled }: { isScrolled: boolean }) {
             ))}
           </div>
           <div className="flex gap-4">
-            <Button variant="outline" className="flex-1 rounded-full h-14" asChild>
-              <Link href="/login" onClick={close}>Sign in</Link>
-            </Button>
-            <Button className="flex-1 bg-accent rounded-full h-14" asChild>
-              <Link href="/register" onClick={close}>Get started</Link>
-            </Button>
+            {isAuthenticated ? (
+              <Button className="flex-1 bg-accent rounded-full h-14" asChild>
+                <Link href="/dashboard" onClick={close}>Go to dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" className="flex-1 rounded-full h-14" asChild>
+                  <Link href="/login" onClick={close}>Sign in</Link>
+                </Button>
+                <Button className="flex-1 bg-accent rounded-full h-14" asChild>
+                  <Link href="/register" onClick={close}>Get started</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>

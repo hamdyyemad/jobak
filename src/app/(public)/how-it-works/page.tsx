@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { Button } from "@/frontend/components/ui/button";
+import { isSignedIn } from "@/backend/lib/auth/session";
+import { CtaButton } from "@/frontend/components/public/shared/cta-button";
 import { PageIntro, PageShell } from "@/frontend/components/public/shared/page-intro";
 
 export const metadata: Metadata = {
@@ -57,7 +56,9 @@ const stages = [
   },
 ];
 
-export default function HowItWorksPage() {
+export default async function HowItWorksPage() {
+  const authenticated = await isSignedIn();
+
   return (
     <PageShell>
       <PageIntro
@@ -97,16 +98,7 @@ export default function HowItWorksPage() {
       </div>
 
       <div className="mt-16">
-        <Button
-          size="lg"
-          className="bg-accent hover:bg-accent-bright text-(--bg-canvas) px-8 h-14 rounded-full group font-medium"
-          asChild
-        >
-          <Link href="/register">
-            Get started
-            <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-          </Link>
-        </Button>
+        <CtaButton isAuthenticated={authenticated} signedOutText="Get started" />
       </div>
     </PageShell>
   );

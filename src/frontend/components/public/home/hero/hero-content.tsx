@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@/frontend/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { roles } from "@/frontend/components//public/home/hero/data";
+import { resolveCta } from "@/frontend/lib/configs/cta";
 import { useCycleIndex } from "@/frontend/hooks";
 
 export function HeroEyebrow() {
@@ -52,12 +53,14 @@ export function HeroDescription() {
   );
 }
 
-export function HeroCTA() {
+export function HeroCTA({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
+  const { text, href } = resolveCta(isAuthenticated, "Find my jobs");
+
   return (
     <div className="flex flex-row items-start gap-4 transition-all duration-700 delay-300">
       <Button size="lg" className="bg-accent hover:bg-accent-bright text-background px-8 h-14 rounded-full group" asChild>
-        <Link href="/register">
-          Find my jobs
+        <Link href={href}>
+          {text}
           <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
         </Link>
       </Button>

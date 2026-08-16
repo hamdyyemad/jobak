@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { Button } from "@/frontend/components/ui/button";
+import { isSignedIn } from "@/backend/lib/auth/session";
+import { CtaButton } from "@/frontend/components/public/shared/cta-button";
 
 export const metadata: Metadata = {
   title: "About — Jobak",
@@ -9,7 +8,9 @@ export const metadata: Metadata = {
     "What Jobak is, why it exists, and how it finds and ranks jobs for you across every major job board.",
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const authenticated = await isSignedIn();
+
   return (
     <main className="relative min-h-screen overflow-x-hidden noise-overlay">
       <section className="relative pt-40 pb-24 lg:pt-48 lg:pb-32">
@@ -23,7 +24,7 @@ export default function AboutPage() {
                 </Block>
               ))}
             </div>
-            <Aside />
+            <Aside isAuthenticated={authenticated} />
           </div>
         </div>
       </section>
@@ -80,7 +81,7 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Aside() {
+function Aside({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
     <div className="lg:sticky lg:top-32 self-start">
       <div className="rounded-2xl border border-border-standard bg-white/2 p-8">
@@ -96,15 +97,12 @@ function Aside() {
         </dl>
 
         <div className="mt-8 pt-8 border-t border-border-subtle">
-          <Button
+          <CtaButton
+            isAuthenticated={isAuthenticated}
+            signedOutText="Get started"
+            size="default"
             className="bg-accent hover:bg-accent-bright text-(--bg-canvas) rounded-full h-12 px-6 group font-medium w-full"
-            asChild
-          >
-            <Link href="/register">
-              Get started
-              <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-            </Link>
-          </Button>
+          />
         </div>
       </div>
     </div>

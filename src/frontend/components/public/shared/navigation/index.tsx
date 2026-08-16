@@ -4,7 +4,7 @@ import { useScrolled } from "@/frontend/hooks";
 import { DesktopNavigation } from "./desktop-nav";
 import { MobileNavigation } from "./mobile-nav";
 
-export function Navigation() {
+export function Navigation({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const isScrolled = useScrolled(50);
 
   // Both variants render and are toggled with CSS. Picking one from a JS media
@@ -12,8 +12,8 @@ export function Navigation() {
   // rebuilt the mobile one on hydration.
   return (
     <>
-      <MobileNavigation isScrolled={isScrolled} />
-      <DesktopNavigation isScrolled={isScrolled} />
+      <MobileNavigation isScrolled={isScrolled} isAuthenticated={isAuthenticated} />
+      <DesktopNavigation isScrolled={isScrolled} isAuthenticated={isAuthenticated} />
     </>
   );
 }

@@ -4,7 +4,7 @@ import { GradientOrb } from "@/frontend/components/ui";
 import { CtaContent } from "./cta-content";
 import { CornerDecorations } from "./corner-decorations";
 
-export function CtaCard() {
+export function CtaCard({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const { ref, isVisible } = useIntersectionVisible<HTMLDivElement>({ threshold: 0.2 });
 
   return (
@@ -22,7 +22,7 @@ export function CtaCard() {
         </div>
         
         <div className="flex flex-col lg:flex-row items-center justify-between gap-12">
-          <CtaContent />
+          <CtaContent isAuthenticated={isAuthenticated} />
         </div>
       </div>
       <CornerDecorations />

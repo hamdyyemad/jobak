@@ -3,7 +3,7 @@ import { SectionHeader } from "./section-header";
 import { ApiKeyNote } from "./api-key-note";
 import { IncludedList } from "./included-list";
 
-export function FreeSection() {
+export function FreeSection({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   return (
     <section
       id="cost"
@@ -13,7 +13,7 @@ export function FreeSection() {
         <div className="relative z-10 max-w-350 mx-auto px-6 lg:px-12">
           <SectionHeader />
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-24 items-start">
-            <ApiKeyNote />
+            <ApiKeyNote isAuthenticated={isAuthenticated} />
             <IncludedList />
           </div>
         </div>
