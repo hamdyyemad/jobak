@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/frontend/components/ui/button";
 import { freeContent } from "./data";
@@ -35,10 +36,10 @@ export function ApiKeyNote() {
         className="bg-background text-foreground hover:bg-background/90 px-8 h-14 text-base rounded-full group font-medium"
         asChild
       >
-        <a href={freeContent.primaryButton.href}>
+        <Link href={freeContent.primaryButton.href}>
           {freeContent.primaryButton.text}
           <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-        </a>
+        </Link>
       </Button>
     </div>
   );

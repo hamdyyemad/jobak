@@ -25,7 +25,6 @@ export function JobRow({ job }: { job: PreviewJob }) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap mt-2">
-          <Pill>{job.source}</Pill>
           <Pill>{job.type}</Pill>
           <span className="text-[11px] text-muted-foreground font-mono">{job.salary}</span>
           <span className="text-[11px] text-muted-foreground/60 ml-auto">{job.postedAt}</span>

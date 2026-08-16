@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { useBodyScrollLock } from "@/frontend/hooks";
 
@@ -14,13 +15,20 @@ export function MobileNavigation({ isScrolled }: { isScrolled: boolean }) {
   // Prevent scrolling when menu is open
   useBodyScrollLock(isOpen);
 
+  const close = () => setIsOpen(false);
+
   return (
     <>
       <header className={`md:hidden fixed z-50 transition-all duration-500 ${isScrolled ? "top-4 left-4 right-4" : "top-0 left-0 right-0"}`}>
         <nav className={`mx-auto transition-all duration-500 ${isScrolled || isOpen ? "bg-background/85 backdrop-blur-md rounded-2xl shadow-lg" : "bg-transparent"}`}>
           <div className={`flex items-center justify-between px-6 transition-all duration-500 ${isScrolled ? "h-14" : "h-20"}`}>
             <NavLogo isScrolled={isScrolled} />
-            <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-foreground">
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="p-2 text-foreground"
+              aria-label={isOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isOpen}
+            >
               {isOpen ? <X /> : <Menu />}
             </button>
           </div>
@@ -31,15 +39,17 @@ export function MobileNavigation({ isScrolled }: { isScrolled: boolean }) {
         <div className="flex flex-col h-full px-8 pt-32 pb-10">
           <div className="flex-1 flex flex-col gap-6">
             {navLinks.map((link) => (
-              <a key={link.name} href={link.href} onClick={() => setIsOpen(false)} className="text-4xl font-display">
+              <Link key={link.name} href={link.href} onClick={close} className="text-4xl font-display">
                 {link.name}
-              </a>
+              </Link>
             ))}
           </div>
           <div className="flex gap-4">
-            <Button variant="outline" className="flex-1 rounded-full h-14">Sign in</Button>
+            <Button variant="outline" className="flex-1 rounded-full h-14" asChild>
+              <Link href="/login" onClick={close}>Sign in</Link>
+            </Button>
             <Button className="flex-1 bg-accent rounded-full h-14" asChild>
-              <a href="/onboarding">Get started</a>
+              <Link href="/register" onClick={close}>Get started</Link>
             </Button>
           </div>
         </div>

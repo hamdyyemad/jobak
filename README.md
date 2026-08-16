@@ -1,13 +1,13 @@
 # 🧠 AI Job Finder Platform
 
-An AI-powered job-matching platform that helps users find highly relevant job opportunities based on their preferences (remote/on-site, location, field, skills, etc.). The system collects user inputs via a guided onboarding flow and triggers an automated n8n workflow to scrape, filter, and recommend jobs using AI.
+An AI-powered job-matching platform that helps users find highly relevant job opportunities based on their preferences (remote/on-site, location, field, skills, etc.). The system collects user inputs via a guided onboarding flow and triggers an automated n8n workflow to collect, filter, and recommend jobs using AI.
 
 ---
 
 ## 🎯 Objectives
 - Provide personalized job recommendations.
 - Support both remote and location-based jobs.
-- Automate job discovery using combined AI and web scraping workflows.
+- Automate job discovery by combining AI with public job-platform APIs and feeds.
 - Integrate seamlessly with external AI APIs (e.g., Grok).
 
 ---
@@ -30,7 +30,7 @@ An AI-powered job-matching platform that helps users find highly relevant job op
             ↓
 [ n8n Webhook Trigger ]
             ↓
-[ n8n Workflow (Scraping + AI) ]
+[ n8n Workflow (Collection + AI) ]
             ↓
 [ Job Results Storage (DB/Cache) ]
             ↓
@@ -80,12 +80,9 @@ POST /webhook/job-search
 1. **Trigger:** Webhook node receives user data.
 2. **Processing & Validation:** Ensures required fields exist, cleans, and normalizes data.
 3. **Query Builder:** Constructs search strings (e.g., `"React Developer remote"` or `"Software Engineer Cairo .NET"`).
-4. **Scraping Nodes:** Extracts job title, company, location, salary, and job link from sources like:
-   - LinkedIn Jobs
-   - Indeed
-   - RemoteOK
-   - Wuzzuf
-   - Glassdoor
+4. **Collection Nodes:** Retrieve job title, company, location, salary, and job link from
+   integrated job platforms. Prefer official/public APIs and feeds; only add a source
+   after confirming its terms of service permit automated access.
 5. **AI Processing (Grok / LLM):** - Filters out irrelevant jobs.
    - Ranks jobs based on skills, experience, and location match.
    - *Optional:* Generates a summary and scores jobs (0–100 relevance).
@@ -141,7 +138,7 @@ POST /webhook/job-search
 - **API Keys:** Symmetrically encrypt all user API keys before storing them in the database.
 - **HTTPS:** Enforce TLS/HTTPS for all frontend-to-backend and backend-to-n8n communication.
 - **Rate Limiting:** Protect the webhook endpoints from spam/abuse.
-- **Scraping Ethics:** Respect `robots.txt` and use appropriate delays/proxies to avoid scraping violations.
+- **Source Compliance:** Only integrate platforms whose terms of service permit automated access. Prefer official/public APIs, respect `robots.txt` and rate limits, and remove any source that disallows it.
 
 ---
 
@@ -154,4 +151,4 @@ POST /webhook/job-search
 
 ---
 
-> **Note:** The priority for V1 is keeping the onboarding structured but simple, starting with 2-3 reliable job scraping sources before scaling, and prioritizing the *quality* of AI job matches over raw quantity.
+> **Note:** The priority for V1 is keeping the onboarding structured but simple, starting with 2-3 reliable, terms-compliant job sources before scaling, and prioritizing the *quality* of AI job matches over raw quantity.

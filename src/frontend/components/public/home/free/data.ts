@@ -7,7 +7,7 @@ export const freeContent = {
         "There is no plan to pick and no card to enter. Jobak itself costs nothing — you connect your own Groq API key during onboarding, and it does the ranking on your behalf.",
     primaryButton: {
         text: "Get started",
-        href: "/onboarding",
+        href: "/register",
     },
     keyLinkText: "console.groq.com/keys",
     keyLinkHref: "https://console.groq.com/keys",
@@ -24,8 +24,8 @@ export const included: IncludedItem[] = [
         description: "No quota and no cooldown — re-run your search whenever you want new matches.",
     },
     {
-        title: "Every source we support",
-        description: "LinkedIn, Indeed, RemoteOK, Wuzzuf, Glassdoor and Remotive, on every search.",
+        title: "Full coverage",
+        description: "Every job platform we support is included on every search — nothing is gated.",
     },
     {
         title: "The whole dashboard",

@@ -52,21 +52,22 @@ function AIVisual() {
   );
 }
 
+/** Abstract "many platforms" motif — deliberately unbranded, no named services. */
 function SourcesVisual() {
-  const sources = ["LI", "IN", "RO", "WZ", "GD", "MO"];
   return (
     <svg viewBox="0 0 200 160" className="w-full h-full">
-      {sources.map((src, i) => {
+      {[0, 1, 2, 3, 4, 5].map((i) => {
         const col = i % 3;
         const row = Math.floor(i / 3);
         const x = 35 + col * 55;
         const y = 30 + row * 70;
         return (
-          <g key={src}>
+          <g key={i}>
             <rect x={x - 18} y={y - 14} width="36" height="28" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
               <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" begin={`${i * 0.2}s`} repeatCount="indefinite" />
             </rect>
-            <text x={x} y={y + 5} textAnchor="middle" fontSize="10" fontFamily="monospace" fill="currentColor" opacity="0.8">{src}</text>
+            <rect x={x - 9} y={y - 4} width="18" height="2" rx="1" fill="currentColor" opacity="0.55" />
+            <rect x={x - 9} y={y + 2} width="11" height="2" rx="1" fill="currentColor" opacity="0.35" />
             {row === 0 && (
               <line x1={x} y1={y + 14} x2={x} y2={y + 42} stroke="currentColor" strokeWidth="1" opacity="0.3">
                 <animate attributeName="opacity" values="0.3;0.7;0.3" dur="1.5s" begin={`${i * 0.2}s`} repeatCount="indefinite" />

@@ -15,8 +15,8 @@ const features = [
   },
   {
     icon: TrendingUp,
-    title: "Multi-source scraping",
-    desc: "LinkedIn, Indeed, RemoteOK & more",
+    title: "Multi-platform coverage",
+    desc: "We search job platforms for you",
   },
   {
     icon: Sparkles,
@@ -84,8 +84,8 @@ export function AuthPanel() {
             </span>
           </h2>
           <p className="text-base text-fg-tertiary leading-relaxed max-w-xs">
-            We scan thousands of listings across major platforms and rank them
-            by how well they match your profile.
+            We search job platforms on your behalf and rank what we find by how
+            well it matches your profile.
           </p>
         </div>
 

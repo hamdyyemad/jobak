@@ -9,13 +9,13 @@ export const features: Feature[] = [
     {
         number: "01",
         title: "AI-Powered Matching",
-        description: "Our AI reads your skills, experience, and preferences then ranks every scraped job with a relevance score — so the best fits always rise to the top.",
+        description: "Our AI reads your skills, experience, and preferences then ranks every job it collects with a relevance score — so the best fits always rise to the top.",
         visual: "ai",
     },
     {
         number: "02",
-        title: "Multi-Source Scraping",
-        description: "We pull from LinkedIn, Indeed, RemoteOK, Wuzzuf, Glassdoor and more in real time. One search, every major board, zero manual browsing.",
+        title: "Multi-Platform Coverage",
+        description: "We search across job platforms so you don't have to open them one by one. One profile, one search, no manual browsing.",
         visual: "sources",
     },
     {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/frontend/components/ui";
 import { NavLogo } from "./nav-logo";
 
@@ -9,20 +10,20 @@ export function DesktopNavigation({ isScrolled }: { isScrolled: boolean }) {
       <nav className={`mx-auto transition-all duration-500 ${isScrolled ? "bg-background/85 backdrop-blur-md border border-foreground/10 rounded-2xl shadow-lg max-w-5xl" : "bg-transparent max-w-7xl"}`}>
         <div className={`flex items-center justify-between px-6 lg:px-8 transition-all duration-500 ${isScrolled ? "h-14" : "h-20"}`}>
           <NavLogo isScrolled={isScrolled} />
-          
+
           <div className="flex items-center gap-12">
             {navLinks.map((link) => (
-              <a key={link.name} href={link.href} className="text-sm text-foreground/70 hover:text-foreground transition-colors relative group">
+              <Link key={link.name} href={link.href} className="text-sm text-foreground/70 hover:text-foreground transition-colors relative group">
                 {link.name}
                 <span className="absolute -bottom-1 left-0 w-0 h-px bg-foreground transition-all duration-300 group-hover:w-full" />
-              </a>
+              </Link>
             ))}
           </div>
 
           <div className="flex items-center gap-4">
-             <a href="/login" className={`text-foreground/70 hover:text-foreground transition-all ${isScrolled ? "text-xs" : "text-sm"}`}>Sign in</a>
+             <Link href="/login" className={`text-foreground/70 hover:text-foreground transition-all ${isScrolled ? "text-xs" : "text-sm"}`}>Sign in</Link>
              <Button size="sm" className="bg-accent rounded-full" asChild>
-               <a href="/onboarding">Get started free</a>
+               <Link href="/register">Get started free</Link>
              </Button>
           </div>
         </div>

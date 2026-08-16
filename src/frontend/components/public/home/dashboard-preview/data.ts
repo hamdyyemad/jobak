@@ -6,76 +6,69 @@ export interface PreviewJob {
     type: string;
     salary: string;
     score: number;
-    source: string;
     postedAt: string;
     bookmarked: boolean;
 }
 
 /**
- * Mirrors the top of the dashboard's own match list so the landing page shows
- * the same shape of result a user actually gets. Keep in sync with
- * `protected/dashboard/data.ts` if that list changes.
+ * Illustrative rows only. Company names are deliberately generic and no
+ * third-party platform is named anywhere in the marketing surface.
  */
 export const previewJobs: PreviewJob[] = [
     {
         title: "Senior Frontend Engineer",
-        company: "Stripe",
-        location: "Remote",
+        company: "Acme Corp",
+        location: "Worldwide",
         remote: true,
         type: "full-time",
         salary: "$120k–$160k",
         score: 97,
-        source: "LinkedIn",
         postedAt: "2h ago",
         bookmarked: false,
     },
     {
         title: "React Developer",
-        company: "Linear",
-        location: "Remote",
+        company: "Northwind",
+        location: "Worldwide",
         remote: true,
         type: "full-time",
         salary: "$90k–$120k",
         score: 94,
-        source: "RemoteOK",
         postedAt: "4h ago",
         bookmarked: true,
     },
     {
         title: "UI Engineer",
-        company: "Figma",
-        location: "Remote / SF",
+        company: "Lumen Labs",
+        location: "Berlin, DE",
         remote: true,
         type: "full-time",
         salary: "$110k–$150k",
         score: 88,
-        source: "Indeed",
         postedAt: "8h ago",
         bookmarked: false,
     },
     {
         title: "Web Developer",
-        company: "Wuzzuf Partner",
+        company: "Delta Systems",
         location: "Cairo, Egypt",
         remote: false,
         type: "full-time",
         salary: "E£25k–E£40k",
         score: 76,
-        source: "Wuzzuf",
         postedAt: "2d ago",
         bookmarked: false,
     },
 ];
 
-/** The dashboard filters by source — these are the sources the workflow covers. */
+/** Filters describe the match itself, never where it came from. */
 export const previewFilters = [
     "all",
-    "LinkedIn",
-    "Indeed",
-    "RemoteOK",
-    "Wuzzuf",
-    "Glassdoor",
-    "Remotive",
+    "top matches",
+    "remote",
+    "full-time",
+    "contract",
+    "bookmarked",
 ];
 
 export interface Highlight {
@@ -93,9 +86,9 @@ export const highlights: Highlight[] = [
     },
     {
         number: "02",
-        title: "Narrow by source",
+        title: "Narrow it down",
         description:
-            "Filter the list down to any single board — LinkedIn, Indeed, RemoteOK, Wuzzuf, Glassdoor or Remotive — or leave it on all and see everything at once.",
+            "Filter to the roles worth your time — top-scoring matches only, remote work, a particular contract type, or just the ones you have already bookmarked.",
     },
     {
         number: "03",

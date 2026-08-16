@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/frontend/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { ctaContent } from "./data";
@@ -39,10 +40,10 @@ function ActionButtons() {
         className="bg-accent hover:bg-accent-bright text-(--bg-canvas) px-8 h-14 text-base rounded-full group font-medium"
         asChild
       >
-        <a href={ctaContent.primaryButton.href}>
+        <Link href={ctaContent.primaryButton.href}>
           {ctaContent.primaryButton.text}
           <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-        </a>
+        </Link>
       </Button>
       <Button
         size="lg"
@@ -50,9 +51,9 @@ function ActionButtons() {
         className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
         asChild
       >
-        <a href={ctaContent.secondaryButton.href}>
+        <Link href={ctaContent.secondaryButton.href}>
           {ctaContent.secondaryButton.text}
-        </a>
+        </Link>
       </Button>
     </div>
   );

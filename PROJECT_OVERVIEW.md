@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-**Jobak** is an intelligent job-matching platform that leverages AI to deliver highly personalized job recommendations. The platform automates job discovery by combining user preferences with web scraping and AI filtering through n8n workflows, helping job seekers find the most relevant opportunities based on their skills, location, experience, and preferences.
+**Jobak** is an intelligent job-matching platform that leverages AI to deliver highly personalized job recommendations. The platform automates job discovery by combining user preferences with automated job collection and AI filtering through n8n workflows, helping job seekers find the most relevant opportunities based on their skills, location, experience, and preferences.
 
 ---
 
 ## 🎯 Core Objectives
 
 1. **Personalized Job Discovery**: Match users with jobs that align with their specific preferences (remote/hybrid/on-site, location, field, skills, experience level)
-2. **Multi-Source Aggregation**: Scrape and aggregate jobs from multiple platforms (LinkedIn, Indeed, RemoteOK, Wuzzuf, Glassdoor, Remotive)
+2. **Multi-Source Aggregation**: Collect and aggregate jobs from integrated job platforms via their public APIs and feeds
 3. **AI-Powered Filtering**: Use Grok API (or OpenAI) to filter irrelevant jobs and score matches (0-100 relevance score)
 4. **Automated Workflow**: Trigger automated job searches via n8n workflows based on user preferences
 5. **User-Friendly Experience**: Provide an intuitive onboarding flow and dashboard for job management
@@ -68,7 +68,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                   n8n Automation Workflow                    │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │ 1. Webhook Trigger → 2. Query Builder → 3. Scrapers   │ │
+│  │ 1. Webhook Trigger → 2. Query Builder → 3. Collectors │ │
 │  │                                                          │ │
 │  │ 4. Data Normalization → 5. Deduplication               │ │
 │  │                                                          │ │
@@ -316,13 +316,13 @@ The n8n workflow (`Scrape Jobs & Store in Supabase.json`) executes the following
 - Load Supabase credentials (URL + Service Role Key)
 - Timestamp the workflow run
 
-#### B. Web Scraping (Parallel Execution)
-**Sources scraped:**
+#### B. Job Collection (Parallel Execution)
+**Integrated sources:**
 1. **Wuzzuf** (Egypt-focused): HTML parsing with JSON-LD extraction
 2. **RemoteOK** (Remote jobs): API-based, filters for developer/engineer roles
 3. **Remotive** (Remote jobs): API-based, software development category
 
-**Scraping Strategy**:
+**Collection Strategy**:
 - User-Agent spoofing to avoid blocks
 - Continue on fail (if one source fails, others proceed)
 - Always output data (empty arrays allowed)
@@ -419,11 +419,8 @@ Users view and manage their job recommendations:
   - Sources count
 - **Filters**: 
   - All sources
-  - LinkedIn
-  - Indeed
-  - RemoteOK
-  - Wuzzuf
-  - Glassdoor
+  - Integrated job platforms (see "Integrated sources" above for what is
+    actually implemented; only add sources whose terms permit automated access)
 - **Job Cards**: Display with:
   - Title & company
   - Location & job type
@@ -444,7 +441,7 @@ Users view and manage their job recommendations:
   type: "full-time" | "part-time" | "freelance" | "contract",
   salary: string,
   score: number, // 0-100
-  source: "LinkedIn" | "Indeed" | "RemoteOK" | "Wuzzuf" | "Glassdoor",
+  source: string, // resolved from the `sources` table; see Integrated sources
   link: string,
   postedAt: string,
   bookmarked: boolean
@@ -814,9 +811,8 @@ x] CI/CD pipeline
   - [ ] Open Graph tags
 - [ ] Multi-language support
 - [ ] Additional job sources
-  - [ ] LinkedIn API (if available)
-  - [ ] Indeed API
-  - [ ] Glassdoor scraping
+  - [ ] Additional job-platform integrations — official/public APIs only,
+        each reviewed against its terms of service before being added
   - [ ] Regional job boards
 - [ ] Mobile app (React Native)
 
@@ -970,11 +966,12 @@ CREATE POLICY "Users can update own matches"
    - [ ] Suspicious activity alerts
    - [ ] Audit logs for sensitive operations
 
-8. **Web Scraping Ethics**:
-   - ⚠️ Respect robots.txt files
-   - ⚠️ Implement polite scraping (delays, user agents)
-   - ⚠️ Cache results to reduce load
-   - ⚠️ Consider official APIs where available
+8. **Source Compliance** (blocking before launch):
+   - ⚠️ Only integrate platforms whose terms of service permit automated access
+   - ⚠️ Prefer official/public APIs and feeds over HTML parsing
+   - ⚠️ Respect robots.txt and rate limits; cache results to reduce load
+   - ⚠️ Do not advertise or name third-party platforms in user-facing copy
+   - ⚠️ Review and remove any source that disallows automated access
 
 ---
 

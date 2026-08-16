@@ -1,34 +1,48 @@
-import { footerSections } from "./data";
+import Link from "next/link";
+import { footerColumns, FooterColumn } from "./data";
 
 export function FooterLinks() {
   return (
     <>
-      {footerSections.map((section) => (
-        <FooterLinkSection key={section.title} title={section.title} links={section.links} />
+      {footerColumns.map((column) => (
+        <FooterColumnBlock key={column.title} column={column} />
       ))}
     </>
   );
 }
 
-interface FooterLinkSectionProps {
-  title: string;
-  links: Array<{
-    name: string;
-    href: string;
-    badge?: string;
-  }>;
-}
-
-function FooterLinkSection({ title, links }: FooterLinkSectionProps) {
+function FooterColumnBlock({ column }: { column: FooterColumn }) {
   return (
     <div>
-      <h3 className="text-sm font-medium mb-6">{title}</h3>
+      <h3 className="text-sm font-medium mb-6">{column.title}</h3>
+      {column.kind === "links" ? (
+        <ul className="space-y-4">
+          {column.links.map((link) => (
+            <FooterLinkItem key={link.name} {...link} />
+          ))}
+        </ul>
+      ) : (
+        <FactList items={column.items} note={column.note} />
+      )}
+    </div>
+  );
+}
+
+/** Static information, deliberately not anchors — there is nowhere to click through to. */
+function FactList({ items, note }: { items: string[]; note?: string }) {
+  return (
+    <>
       <ul className="space-y-4">
-        {links.map((link) => (
-          <FooterLinkItem key={link.name} {...link} />
+        {items.map((item) => (
+          <li key={item} className="text-sm text-muted-foreground">
+            {item}
+          </li>
         ))}
       </ul>
-    </div>
+      {note && (
+        <p className="text-xs text-muted-foreground/70 mt-5 leading-relaxed">{note}</p>
+      )}
+    </>
   );
 }
 
@@ -41,7 +55,7 @@ interface FooterLinkItemProps {
 function FooterLinkItem({ name, href, badge }: FooterLinkItemProps) {
   return (
     <li>
-      <a
+      <Link
         href={href}
         className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-2"
       >
@@ -51,7 +65,7 @@ function FooterLinkItem({ name, href, badge }: FooterLinkItemProps) {
             {badge}
           </span>
         )}
-      </a>
+      </Link>
     </li>
   );
 }
