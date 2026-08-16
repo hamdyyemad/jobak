@@ -1,8 +1,10 @@
-import { 
-  HeroSection, 
-  HowItWorksSection, 
-  FeaturesSection, 
-  CtaSection 
+import {
+  HeroSection,
+  HowItWorksSection,
+  FeaturesSection,
+  DashboardPreviewSection,
+  FreeSection,
+  CtaSection
 } from "@/frontend/components/public";
 
 export default function Home() {
@@ -11,6 +13,8 @@ export default function Home() {
       <HeroSection />
       <HowItWorksSection />
       <FeaturesSection />
+      <DashboardPreviewSection />
+      <FreeSection />
       <CtaSection />
     </main>
   );

@@ -15,8 +15,8 @@ export const footerSections: FooterSection[] = [
         links: [
             { name: "How it works", href: "#how-it-works" },
             { name: "Features", href: "#features" },
-            { name: "Pricing", href: "#pricing" },
-            { name: "Job sources", href: "#integrations" },
+            { name: "Dashboard", href: "#dashboard" },
+            { name: "Cost", href: "#cost" },
         ],
     },
     {
