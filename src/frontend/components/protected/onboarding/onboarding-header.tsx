@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { X } from "lucide-react";
+import { JobakLogo } from "@/frontend/components/shared/jobak-logo";
 
 interface OnboardingHeaderProps {
   step: number;
@@ -11,29 +10,29 @@ export function OnboardingHeader({ step, totalSteps, progress }: OnboardingHeade
   return (
     <header className="border-b border-border-subtle backdrop-blur-sm sticky top-0 z-10 bg-(--bg-canvas)/80">
       <nav className="max-w-300 mx-auto px-6 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center font-bold text-(--bg-canvas) text-base">
-            J
-          </div>
-          <span className="text-lg font-display tracking-tight">Jobak</span>
-        </Link>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-(--fg-tertiary) font-mono">
-            {step} / {totalSteps}
-          </span>
-          <Link
-            href="/"
-            className="w-8 h-8 rounded-lg border border-border-standard flex items-center justify-center text-(--fg-tertiary) hover:text-(--fg-primary) hover:border-border-strong transition-all"
-          >
-            <X className="w-4 h-4" />
-          </Link>
-        </div>
+        {/*
+          Not a link. Onboarding has to be completed on first run, so the header
+          carries no way out — that is also why there is no close button.
+        */}
+        <JobakLogo size="sm" showText href="" />
+
+        <span className="text-sm text-(--fg-tertiary) font-mono" aria-live="polite">
+          {step} / {totalSteps}
+        </span>
       </nav>
-      {/* Progress bar */}
-      <div className="h-px bg-bg-surface">
+
+      {/* Progress bar — scaled rather than width-animated, so it never lays out */}
+      <div
+        className="h-px bg-bg-surface"
+        role="progressbar"
+        aria-valuenow={step}
+        aria-valuemin={1}
+        aria-valuemax={totalSteps}
+        aria-label="Onboarding progress"
+      >
         <div
-          className="h-full bg-accent transition-all duration-500 ease-out"
-          style={{ width: `${progress}%` }}
+          className="h-full w-full origin-left bg-accent transition-transform duration-500 ease-out motion-reduce:transition-none"
+          style={{ transform: `scaleX(${progress / 100})` }}
         />
       </div>
     </header>

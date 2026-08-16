@@ -25,6 +25,8 @@ async function getOnboardingDestination(userId: string): Promise<"/onboarding" |
 const SIGN_UP_FALLBACK = "We couldn't create your account. Please try again.";
 
 export async function signUp(formData: FormData) {
+  let destination: string;
+
   // NOTE: redirect() throws NEXT_REDIRECT by design, so it must stay outside the
   // try/catch or it would be swallowed and reported as a failure.
   try {
@@ -34,7 +36,7 @@ export async function signUp(formData: FormData) {
     const password = formData.get("password") as string;
     const fullName = (formData.get("fullName") as string) || "";
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName } },
@@ -44,13 +46,25 @@ export async function signUp(formData: FormData) {
       logServerError("signUp", error);
       return { error: toUserMessage(error, SIGN_UP_FALLBACK) };
     }
+
+    /*
+     * With email confirmation switched on, signUp succeeds but returns no
+     * session. Sending them to /onboarding then just bounces off the middleware
+     * into /login with no explanation, which is what made this look broken.
+     *
+     * Note we do not branch on whether the address was already registered.
+     * Supabase deliberately returns an indistinguishable response there, and
+     * saying "that email exists" would turn signup into an account oracle.
+     */
+    destination = data.session
+      ? "/onboarding"
+      : `/login?notice=verify-email&email=${encodeURIComponent(email)}`;
   } catch (error) {
     logServerError("signUp", error);
     return { error: toUserMessage(error, SIGN_UP_FALLBACK) };
   }
 
-  // New users always go to onboarding
-  redirect("/onboarding");
+  redirect(destination);
 }
 
 const SIGN_IN_FALLBACK = "We couldn't sign you in. Please try again.";

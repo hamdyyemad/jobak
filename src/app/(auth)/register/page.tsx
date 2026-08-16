@@ -5,7 +5,7 @@ import { ArrowRight, Eye, EyeOff, Check } from "lucide-react";
 import { AuthLayout } from "@/frontend/components/auth/auth-layout";
 import { AuthInput } from "@/frontend/components/auth/auth-input";
 import { OAuthButtons } from "@/frontend/components/auth/oauth-buttons";
-import { AuthErrorBanner } from "@/frontend/components/auth/auth-error-banner";
+import { AuthNotice } from "@/frontend/components/auth/auth-notice";
 import { signUp } from "@/backend/actions/auth";
 
 const passwordRules = [
@@ -48,9 +48,9 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        {/* Surfaces ?error= handed back by the OAuth callback */}
+        {/* Surfaces ?error= / ?notice= handed back by the auth routes */}
         <Suspense fallback={null}>
-          <AuthErrorBanner />
+          <AuthNotice />
         </Suspense>
 
         {/* Form */}

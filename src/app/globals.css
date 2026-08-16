@@ -338,6 +338,27 @@ body {
   50%      { transform: translate3d(-7%, 7%, 0) scale(0.94); }
 }
 
+/*
+ * Onboarding step transitions, in the spirit of a Windows setup flow: content
+ * settles in from the direction of travel, staggered so the eye lands on the
+ * heading first. `--step-from` is set per step so going back reads as going back.
+ * Transform + opacity only.
+ */
+.step-enter {
+  animation: step-enter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes step-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--step-from, 24px), 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 .progress-bar {
   animation: progress-bar 5s linear forwards;
 }
