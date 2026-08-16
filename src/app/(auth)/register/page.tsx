@@ -58,7 +58,7 @@ export default function RegisterPage() {
               label="First name"
               name="firstName"
               type="text"
-              placeholder="Sarah"
+              placeholder="Yara"
               autoComplete="given-name"
               required
             />
@@ -66,7 +66,7 @@ export default function RegisterPage() {
               label="Last name"
               name="lastName"
               type="text"
-              placeholder="Kim"
+              placeholder="Mansour"
               autoComplete="family-name"
               required
             />

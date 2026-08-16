@@ -1,143 +1,79 @@
-"use client";
-import { Briefcase, Sparkles, TrendingUp, Zap } from "lucide-react";
+import { JobakLogo } from "@/frontend/components/shared/jobak-logo";
+import { AuthCarousel } from "./auth-carousel";
 
-const stats = [
-  { value: "50K+", label: "Jobs matched daily" },
-  { value: "94%", label: "Match accuracy" },
-  { value: "12x", label: "Faster job search" },
-];
-
-const features = [
-  {
-    icon: Zap,
-    title: "AI-powered matching",
-    desc: "Ranked by fit, not recency",
-  },
-  {
-    icon: TrendingUp,
-    title: "Multi-platform coverage",
-    desc: "We search job platforms for you",
-  },
-  {
-    icon: Sparkles,
-    title: "Personalized scoring",
-    desc: "Tailored to your skills & preferences",
-  },
-];
-
+/**
+ * Brand side of the auth split. Server-rendered apart from the carousel island.
+ *
+ * The ambient fields are plain radial gradients animated on transform only.
+ * They deliberately avoid `filter: blur()` — a blurred 500px box has to be
+ * re-rasterised through the filter pipeline on every animation frame, which is
+ * exactly the cost this project has been stripping out elsewhere.
+ */
 export function AuthPanel() {
   return (
-    <div className="relative hidden lg:flex flex-col justify-between h-full min-h-screen overflow-hidden bg-bg-panel border-r border-border-subtle p-12">
-      {/* Aurora blobs */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div
-          className="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full animate-aurora"
-          style={{
-            background:
-              "radial-gradient(circle at center, oklch(0.82 0.20 145 / 0.18), transparent 70%)",
-            filter: "blur(60px)",
-          }}
-        />
-        <div
-          className="absolute bottom-0 -left-20 w-[350px] h-[350px] rounded-full animate-aurora-reverse"
-          style={{
-            background:
-              "radial-gradient(circle at center, oklch(0.82 0.20 145 / 0.10), transparent 70%)",
-            filter: "blur(50px)",
-          }}
-        />
+    <aside className="relative hidden lg:flex flex-col h-full min-h-dvh overflow-hidden bg-bg-panel border-r border-border-subtle p-12">
+      <AmbientField />
+
+      <div className="relative z-10 panel-enter">
+        <JobakLogo size="md" showText />
       </div>
 
-      {/* Subtle dot grid */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.025]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle, var(--fg-primary) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-        }}
-      />
-
-      {/* Logo */}
-      <div className="relative z-10 flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center font-bold text-bg-canvas text-lg shrink-0">
-          J
-        </div>
-        <span className="text-xl font-display tracking-tight text-fg-primary">
-          Jobak
-        </span>
-      </div>
-
-      {/* Center content */}
-      <div className="relative z-10 space-y-10">
-        {/* Headline */}
-        <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-xs font-mono text-accent-text">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-glow" />
-            AI-powered job matching
-          </div>
-          <h2 className="text-4xl font-display leading-tight tracking-tight text-fg-primary">
+      {/* Headline and carousel travel together as one centred block rather than
+          being pushed to opposite ends of the panel. */}
+      <div className="relative z-10 flex-1 flex flex-col justify-center gap-16 max-w-md">
+        <div>
+          <h2
+            className="text-4xl xl:text-5xl font-display leading-[1.08] tracking-tight text-fg-primary panel-enter"
+            style={{ animationDelay: "90ms" }}
+          >
             Find jobs that{" "}
             <span className="relative inline-block">
               actually fit
               <span className="absolute -bottom-1 left-0 right-0 h-2 bg-accent/25 -z-10 rounded" />
             </span>
           </h2>
-          <p className="text-base text-fg-tertiary leading-relaxed max-w-xs">
-            We search job platforms on your behalf and rank what we find by how
-            well it matches your profile.
+          <p
+            className="mt-6 text-base text-fg-tertiary leading-relaxed panel-enter"
+            style={{ animationDelay: "180ms" }}
+          >
+            Describe the role once. We search job platforms on your behalf and rank
+            what we find by how well it matches your profile.
           </p>
         </div>
 
-        {/* Feature list */}
-        <div className="space-y-4">
-          {features.map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="flex items-start gap-3.5">
-              <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0">
-                <Icon className="w-4 h-4 text-accent-text" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-fg-primary">{title}</p>
-                <p className="text-xs text-fg-quaternary">{desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4 pt-2">
-          {stats.map(({ value, label }) => (
-            <div
-              key={label}
-              className="p-4 rounded-xl bg-white/2 border border-border-standard space-y-1"
-            >
-              <p className="text-xl font-display text-fg-primary">{value}</p>
-              <p className="text-[11px] text-fg-quaternary leading-tight">
-                {label}
-              </p>
-            </div>
-          ))}
+        <div className="panel-enter" style={{ animationDelay: "280ms" }}>
+          <AuthCarousel />
         </div>
       </div>
+    </aside>
+  );
+}
 
-      {/* Bottom quote */}
-      <div className="relative z-10 p-4 rounded-xl bg-white/2 border border-border-standard">
-        <p className="text-sm text-fg-secondary leading-relaxed italic">
-          &ldquo;Jobak found me three senior roles I would have missed — all
-          scored above 90%.&rdquo;
-        </p>
-        <div className="mt-3 flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
-            <Briefcase className="w-3.5 h-3.5 text-accent-text" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-fg-primary">Sarah K.</p>
-            <p className="text-[11px] text-fg-quaternary">
-              Senior Frontend Engineer
-            </p>
-          </div>
-        </div>
-      </div>
+function AmbientField() {
+  return (
+    <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      <div
+        className="absolute -top-40 -right-40 w-130 h-130 rounded-full animate-drift"
+        style={{
+          background:
+            "radial-gradient(closest-side, color-mix(in oklab, var(--accent) 22%, transparent), transparent 72%)",
+        }}
+      />
+      <div
+        className="absolute -bottom-32 -left-28 w-105 h-105 rounded-full animate-drift-slow"
+        style={{
+          background:
+            "radial-gradient(closest-side, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%)",
+        }}
+      />
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, var(--fg-primary) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
     </div>
   );
 }

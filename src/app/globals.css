@@ -298,6 +298,46 @@ body {
   }
 }
 
+/*
+ * Auth panel entry cascade. Sets opacity:0 up front so a delayed start cannot
+ * flash the content in before its turn. Transform + opacity only, so every
+ * frame stays on the compositor.
+ */
+.panel-enter {
+  opacity: 0;
+  animation: panel-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slow ambient drift for the auth panel's gradient fields. */
+.animate-drift {
+  animation: drift 26s ease-in-out infinite;
+}
+
+.animate-drift-slow {
+  animation: drift-reverse 34s ease-in-out infinite;
+}
+
+@keyframes drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(8%, -6%, 0) scale(1.12); }
+}
+
+@keyframes drift-reverse {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50%      { transform: translate3d(-7%, 7%, 0) scale(0.94); }
+}
+
 .progress-bar {
   animation: progress-bar 5s linear forwards;
 }

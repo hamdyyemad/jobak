@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import Link from "next/link";
+import { JobakLogo } from "@/frontend/components/shared/jobak-logo";
 import { AuthPanel } from "./auth-panel";
 
 interface AuthLayoutProps {
@@ -8,15 +9,12 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-dvh grid lg:grid-cols-2">
       <AuthPanel />
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-dvh">
         {/* Mobile logo */}
-        <div className="flex lg:hidden items-center gap-2.5 p-6 border-b border-border-subtle">
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center font-bold text-bg-canvas text-base shrink-0">
-            J
-          </div>
-          <span className="text-lg font-display tracking-tight">Jobak</span>
+        <div className="flex lg:hidden items-center p-6 border-b border-border-subtle">
+          <JobakLogo size="sm" showText />
         </div>
 
         <div className="flex-1 flex items-center justify-center px-6 py-12">
