@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
+import { isProductionSite } from "./site";
+
 export const jobakViewport: Viewport = {
     width: "device-width",
     initialScale: 1,
@@ -28,17 +30,28 @@ export const jobakMetadata: Metadata = {
         ],
     },
     manifest: "/site.webmanifest",
-    robots: {
-        index: true,
-        follow: true,
-        googleBot: {
+    robots: isProductionSite
+        ? {
             index: true,
             follow: true,
-            "max-video-preview": -1,
-            "max-image-preview": "large",
-            "max-snippet": -1,
+            googleBot: {
+                index: true,
+                follow: true,
+                "max-video-preview": -1,
+                "max-image-preview": "large",
+                "max-snippet": -1,
+            },
+        }
+        : {
+            index: false,
+            follow: false,
+            nocache: true,
+            googleBot: {
+                index: false,
+                follow: false,
+                noimageindex: true,
+            },
         },
-    },
     openGraph: {
         type: "website",
         locale: "en_US",
