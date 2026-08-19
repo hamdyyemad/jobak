@@ -338,27 +338,6 @@ body {
   50%      { transform: translate3d(-7%, 7%, 0) scale(0.94); }
 }
 
-/*
- * Onboarding step transitions, in the spirit of a Windows setup flow: content
- * settles in from the direction of travel, staggered so the eye lands on the
- * heading first. `--step-from` is set per step so going back reads as going back.
- * Transform + opacity only.
- */
-.step-enter {
-  animation: step-enter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes step-enter {
-  from {
-    opacity: 0;
-    transform: translate3d(var(--step-from, 24px), 10px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 .progress-bar {
   animation: progress-bar 5s linear forwards;
 }
@@ -398,6 +377,422 @@ body {
 }
 }
 
+
+/* ============================================================
+   Onboarding — the scene
+   ============================================================
+   The reference points are hertzwerk.ch and neoconda.com. Neither draws a
+   centred column of cards; both treat the whole viewport as one instrument
+   panel, with an object at the centre that repaints when you choose something.
+   Everything below serves that: a tinted full-bleed field, bare option rows
+   instead of containers, and micro-type pinned to the frame.
+
+   The three tint channels are registered as <color> so they interpolate. An
+   unregistered custom property snaps between values, which would make every
+   choice a hard cut instead of a fade. Everything downstream — grid, wash,
+   object, rules, readout — is derived from these, so they all move together. */
+@property --sc-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #52c36b;
+}
+@property --sc-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2f7a45;
+}
+@property --sc-c {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8a8f98;
+}
+
+.scene {
+  /* One source of truth for the object's diameter — the orbits are sized from
+     it, so they cannot drift out of step at different viewport widths. */
+  --scene-size: clamp(150px, 17vw, 214px);
+  --sc-fade: 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: --sc-a var(--sc-fade), --sc-b var(--sc-fade), --sc-c var(--sc-fade);
+}
+
+/* ── The field: grid + wash across the entire viewport ─────── */
+.scene-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.scene-field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--sc-a) 14%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--sc-a) 14%, transparent) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 68% 45%, #000 0%, transparent 80%);
+  mask-image: radial-gradient(ellipse 80% 70% at 68% 45%, #000 0%, transparent 80%);
+}
+
+.scene-field::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 55% 60% at 70% 48%,
+    color-mix(in srgb, var(--sc-a) 12%, transparent),
+    transparent 68%
+  );
+}
+
+/* ── The object ────────────────────────────────────────────── */
+.scene-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+
+.scene-object {
+  position: relative;
+  width: var(--scene-size);
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: radial-gradient(
+    circle at 34% 24%,
+    color-mix(in srgb, #fff 62%, var(--sc-a)) 0%,
+    var(--sc-a) 26%,
+    color-mix(in srgb, var(--sc-b) 62%, #000) 62%,
+    color-mix(in srgb, var(--sc-b) 22%, #000) 84%,
+    #040605 100%
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sc-a) 34%, transparent),
+    0 34px 90px color-mix(in srgb, var(--sc-a) 26%, transparent);
+}
+
+.scene-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    color-mix(in srgb, var(--sc-c) 45%, transparent) 18%,
+    transparent 38%,
+    rgba(255, 255, 255, 0.22) 62%,
+    transparent 82%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  animation: scene-spin 16s linear infinite;
+}
+
+@keyframes scene-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Worldwide has no flag to sample from, so it reads as a wireframe globe. */
+.scene-meridians {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    repeating-linear-gradient(to right, transparent 0 22px, rgba(255, 255, 255, 0.15) 22px 23px),
+    repeating-linear-gradient(to bottom, transparent 0 22px, rgba(255, 255, 255, 0.08) 22px 23px);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 52%, transparent 78%);
+  mask-image: radial-gradient(circle at 50% 50%, #000 52%, transparent 78%);
+}
+
+/*
+ * One orbit per answer given. The flow's progress is legible as a shape before
+ * it is legible as a number — the object visibly accumulates as you fill it in.
+ */
+.scene-orbit {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--sc-a) 26%, transparent);
+  border-radius: 9999px;
+  animation: scene-orbit-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.scene-orbit::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 9999px;
+  background: var(--sc-a);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sc-a) 80%, transparent);
+}
+
+@keyframes scene-orbit-in {
+  from { opacity: 0; transform: scale(0.82); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.scene-swell {
+  animation: scene-swell 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes scene-swell {
+  from { opacity: 0.3; transform: scale(0.84); }
+  55%  { transform: scale(1.05); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.scene-caption {
+  color: color-mix(in srgb, var(--sc-a) 62%, var(--fg-secondary));
+}
+
+/* ── Readout: the running answer sheet, instrument-panel style ── */
+.readout-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.42rem 0 0.42rem 0.75rem;
+  border-left: 1px solid var(--border-subtle);
+  transition: border-color 300ms ease, color 300ms ease;
+}
+
+.readout-row[data-active="true"] {
+  border-left-color: var(--sc-a);
+}
+
+.readout-row[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--sc-a);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sc-a) 70%, transparent);
+}
+
+/* ── Option rows — the hertzwerk move: rules, not cards ────── */
+.opt-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  padding: 1rem 0.9rem;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  transition: padding-left 380ms cubic-bezier(0.16, 1, 0.3, 1), border-color 300ms ease;
+}
+
+.opt-row:first-child {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* The tint sweeps in from the left rather than fading — it reads as the row
+   being *claimed*, and a transform stays on the compositor. */
+.opt-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(0);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--sc-a) 13%, transparent),
+    transparent 85%
+  );
+  transition: transform 480ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.opt-row:hover {
+  padding-left: 1.5rem;
+}
+
+.opt-row:hover::before {
+  transform: scaleX(0.35);
+}
+
+.opt-row[data-selected="true"] {
+  padding-left: 1.5rem;
+  border-bottom-color: color-mix(in srgb, var(--sc-a) 35%, transparent);
+}
+
+.opt-row[data-selected="true"]::before {
+  transform: scaleX(1);
+}
+
+.opt-row > * {
+  position: relative;
+}
+
+.opt-index {
+  font-variant-numeric: tabular-nums;
+  transition: color 300ms ease;
+}
+
+.opt-marker {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--border-strong);
+  transition: background 300ms ease, border-color 300ms ease, transform 300ms ease;
+}
+
+.opt-row[data-selected="true"] .opt-marker {
+  background: var(--sc-a);
+  border-color: var(--sc-a);
+  transform: rotate(45deg) scale(1.15);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--sc-a) 70%, transparent);
+}
+
+/* ── The ghost numeral behind each step ────────────────────── */
+.step-numeral {
+  position: absolute;
+  top: -0.2em;
+  left: -0.05em;
+  z-index: -1;
+  font-size: clamp(130px, 15vw, 210px);
+  line-height: 0.8;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in srgb, var(--sc-a) 15%, transparent);
+  pointer-events: none;
+  user-select: none;
+  animation: numeral-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes numeral-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Frame rails ───────────────────────────────────────────── */
+.rail-meter {
+  display: flex;
+  gap: 3px;
+}
+
+.rail-tick {
+  width: 26px;
+  height: 3px;
+  background: var(--bg-surface);
+  transition: background 420ms ease, box-shadow 420ms ease;
+}
+
+.rail-tick[data-on="true"] {
+  background: var(--sc-a);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sc-a) 60%, transparent);
+}
+
+/* ── Editorial inputs: a rule, not a box ───────────────────── */
+.field-input {
+  width: 100%;
+  padding: 0.7rem 0.15rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-standard);
+  color: var(--fg-primary);
+  font-size: 1.0625rem;
+  transition: border-color 300ms ease;
+}
+
+.field-input::placeholder {
+  color: var(--fg-quaternary);
+}
+
+.field-input:focus {
+  outline: none;
+  border-bottom-color: var(--sc-a);
+}
+
+.field-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.15rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-standard);
+  text-align: left;
+  transition: border-color 300ms ease;
+}
+
+.field-trigger:hover:not(:disabled),
+.field-trigger[aria-expanded="true"] {
+  border-bottom-color: var(--sc-a);
+}
+
+.field-trigger:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── Dropdown popover ──────────────────────────────────────── */
+.select-pop {
+  transform-origin: top center;
+  animation: select-pop 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Opening upward should also grow upward, or it reads as the wrong element. */
+.select-pop[data-drop="up"] {
+  transform-origin: bottom center;
+  animation-name: select-pop-up;
+}
+
+@keyframes select-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes select-pop-up {
+  from { opacity: 0; transform: translateY(4px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Small entrances ───────────────────────────────────────── */
+.chip-in {
+  animation: chip-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes chip-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+
+.check-pop {
+  animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes check-pop {
+  from { opacity: 0; transform: scale(0.4) rotate(-25deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+/*
+ * Step entrance. Each block is offset so the eye lands on the heading, then the
+ * controls. Transform + opacity only, so every frame stays on the compositor.
+ */
+.step-enter {
+  animation: step-enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes step-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--step-from, 24px), 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -412,3 +807,4 @@ body {
     scroll-behavior: auto !important;
   }
 }
+

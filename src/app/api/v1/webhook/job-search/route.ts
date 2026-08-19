@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
-import { encryptGroqKey } from "@/backend/lib/crypto/groq-key";
+import { encryptApiKey } from "@/backend/lib/crypto/api-key";
+import { isAiProvider } from "@/backend/lib/ai/verify-key";
 import { toUserMessage, logServerError, isConnectionError } from "@/backend/lib/errors";
+import type { AiProvider } from "@/frontend/types/on-boarding";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,22 +19,45 @@ export async function POST(request: NextRequest) {
     // ── 2. Parse + validate body ──────────────────────────────
     const body = await request.json();
 
-    if (!body.workPreference || !body.field) {
+    const workPreference: string[] = Array.isArray(body.workPreference)
+      ? body.workPreference
+      : // Tolerates the pre-multi-select payload, which sent a single string.
+        [body.workPreference].filter(Boolean);
+
+    if (workPreference.length === 0 || !body.field) {
       return NextResponse.json(
         { error: "Missing required fields: workPreference, field" },
         { status: 400 }
       );
     }
 
-    if (!body.apiKey || typeof body.apiKey !== "string") {
+    /*
+     * Keys arrive as { provider: key }. Unknown providers and blank values are
+     * dropped rather than rejected — a stale provider name in an old client
+     * should not fail an otherwise complete submission.
+     */
+    const submittedKeys: Record<string, unknown> = body.aiKeys ?? {};
+    const keyEntries = Object.entries(submittedKeys).filter(
+      ([provider, key]) => isAiProvider(provider) && typeof key === "string" && key.trim()
+    ) as [AiProvider, string][];
+
+    if (keyEntries.length === 0) {
       return NextResponse.json(
-        { error: "Groq API key is required" },
+        { error: "At least one AI provider key is required" },
         { status: 400 }
       );
     }
 
-    // ── 3. Encrypt Groq API key + persist preferences ─────────
-    const encryptedKey = await encryptGroqKey(body.apiKey as string);
+    // ── 3. Encrypt every key + persist preferences ────────────
+    const encryptedKeys: Partial<Record<AiProvider, string>> = {};
+    for (const [provider, key] of keyEntries) {
+      encryptedKeys[provider] = await encryptApiKey(key.trim());
+    }
+
+    const location = {
+      country: body.location?.country ?? "",
+      worldwide: Boolean(body.location?.worldwide),
+    };
 
     const service = createServiceClient();
     const { error: upsertError } = await service
@@ -40,15 +65,20 @@ export async function POST(request: NextRequest) {
       .upsert(
         {
           user_id: user.id,
-          work_preference: body.workPreference,
-          location: body.location ?? { country: "", city: "" },
+          work_preference: workPreference,
+          location,
           field: body.field,
           skills: body.skills,
           experience: body.experience ?? 0,
           job_types: body.jobType ?? [],
+          job_titles: body.jobTitles ?? [],
           seniority: body.seniority ?? "mid",
           salary: body.salary ?? { min: 0, max: 0, currency: "USD" },
-          groq_api_key_encrypted: encryptedKey,
+          ai_providers: keyEntries.map(([provider]) => provider),
+          ai_keys_encrypted: encryptedKeys,
+          // Kept in step with ai_keys_encrypted so anything still reading the
+          // single-provider column keeps working.
+          groq_api_key_encrypted: encryptedKeys.groq ?? null,
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
         },
@@ -76,16 +106,20 @@ export async function POST(request: NextRequest) {
 
     const payload = {
       userId: user.id,
-      workPreference: body.workPreference,
-      location: body.location ?? { country: "", city: "" },
+      workPreference,
+      location,
       field: body.field,
       skills: body.skills,
       experience: body.experience ?? 0,
       jobType: body.jobType ?? [],
+      jobTitles: body.jobTitles ?? [],
       seniority: body.seniority ?? "mid",
       salary: body.salary ?? { min: 0, max: 0, currency: "USD" },
-      // Pass the plaintext key to n8n so it can call Groq — n8n is server-side only
-      groqApiKey: body.apiKey,
+      // Plaintext keys go to n8n so it can call the provider — n8n is server-side
+      // only. The first provider picked is the one the workflow should prefer.
+      aiProvider: keyEntries[0][0],
+      aiKeys: Object.fromEntries(keyEntries),
+      groqApiKey: submittedKeys.groq ?? "",
       timestamp: new Date().toISOString(),
     };
 

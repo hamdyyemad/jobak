@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
-import { decryptGroqKey } from "@/backend/lib/crypto/groq-key";
+import { decryptApiKey } from "@/backend/lib/crypto/api-key";
 import {
   toUserMessage,
   logServerError,
@@ -51,9 +51,23 @@ async function handleRefresh() {
     );
   }
 
-  let groqApiKey = "";
+  /*
+   * Keys live in `ai_keys_encrypted` keyed by provider. Rows written before
+   * multi-provider support only have the single Groq column, so that is read as
+   * a fallback rather than forcing those users back through onboarding.
+   */
+  const stored: Record<string, string> =
+    prefs.ai_keys_encrypted && typeof prefs.ai_keys_encrypted === "object"
+      ? prefs.ai_keys_encrypted
+      : prefs.groq_api_key_encrypted
+        ? { groq: prefs.groq_api_key_encrypted }
+        : {};
+
+  const aiKeys: Record<string, string> = {};
   try {
-    groqApiKey = await decryptGroqKey(prefs.groq_api_key_encrypted);
+    for (const [provider, encrypted] of Object.entries(stored)) {
+      aiKeys[provider] = await decryptApiKey(encrypted);
+    }
   } catch (decryptError) {
     logServerError("jobs/refresh:decrypt", decryptError);
     return NextResponse.json(
@@ -61,6 +75,18 @@ async function handleRefresh() {
       { status: 500 }
     );
   }
+
+  if (Object.keys(aiKeys).length === 0) {
+    return NextResponse.json(
+      { error: "No AI key on file. Add one to start a search." },
+      { status: 400 }
+    );
+  }
+
+  // The provider the user picked first is the one the workflow should prefer.
+  const preferredProvider: string =
+    (Array.isArray(prefs.ai_providers) && prefs.ai_providers.find((p: string) => aiKeys[p])) ??
+    Object.keys(aiKeys)[0];
 
   const n8nUrl = process.env.N8N_WEBHOOK_URL;
   const n8nSecret = process.env.N8N_WEBHOOK_SECRET;
@@ -82,9 +108,12 @@ async function handleRefresh() {
     skills: prefs.skills,
     experience: prefs.experience,
     jobType: prefs.job_types,
+    jobTitles: prefs.job_titles ?? [],
     seniority: prefs.seniority,
     salary: prefs.salary,
-    groqApiKey,
+    aiProvider: preferredProvider,
+    aiKeys,
+    groqApiKey: aiKeys.groq ?? "",
     timestamp: new Date().toISOString(),
   };
 

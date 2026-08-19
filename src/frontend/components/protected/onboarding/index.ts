@@ -7,3 +7,7 @@ export { StepFieldSkills } from "./step-field-skills";
 export { StepJobPreferences } from "./step-job-preferences";
 export { StepSalary } from "./step-salary";
 export { StepApiKey } from "./step-api-key";
+export { ScenePanel } from "./scene-panel";
+export { OptionRow } from "./option-row";
+export { sceneState } from "./scene-state";
+export type { SceneState, ReadoutRow } from "./scene-state";

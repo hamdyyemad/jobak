@@ -59,14 +59,28 @@ CREATE INDEX idx_jobs_is_relevant ON jobs(is_relevant) WHERE is_relevant = true;
 CREATE TABLE user_preferences (
   id                     UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id                UUID REFERENCES auth.users NOT NULL UNIQUE,
-  work_preference        TEXT CHECK (work_preference IN ('remote', 'on-site', 'hybrid')),
+  -- An array since onboarding step 1 became multi-select: someone can be open
+  -- to remote *and* hybrid, and forcing one answer lost half the intent.
+  work_preference        TEXT[] DEFAULT '{}'
+                           CHECK (work_preference <@ ARRAY['remote', 'on-site', 'hybrid']),
+  -- { country: ISO-3166-1 alpha-2 | "", worldwide: boolean }. `city` was dropped
+  -- from onboarding — no source we query filters below country level.
   location               JSONB,
   field                  TEXT,
   skills                 TEXT[],
   experience             INTEGER,
   job_types              TEXT[],
+  -- Titles from the controlled list in src/frontend/lib/configs/job-titles.ts
+  job_titles             TEXT[] DEFAULT '{}',
   seniority              TEXT CHECK (seniority IN ('entry', 'mid', 'senior', 'lead')),
   salary                 JSONB,
+  -- Providers the user connected, in pick order; the first is preferred.
+  ai_providers           TEXT[] DEFAULT '{}'
+                           CHECK (ai_providers <@ ARRAY['anthropic', 'openai', 'gemini', 'groq']),
+  -- { provider: "iv:ciphertext" }, each value AES-256-GCM encrypted.
+  ai_keys_encrypted      JSONB DEFAULT '{}'::jsonb,
+  -- Superseded by ai_keys_encrypted->>'groq'. Still written and still read as a
+  -- fallback for rows created before multi-provider support.
   groq_api_key_encrypted TEXT,
   onboarding_completed   BOOLEAN DEFAULT false,
   created_at             TIMESTAMPTZ DEFAULT NOW(),
@@ -140,3 +154,48 @@ $$;
 CREATE TRIGGER user_preferences_updated_at
   BEFORE UPDATE ON user_preferences
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ============================================================
+-- Migration — onboarding rework (2026-08-20)
+-- ============================================================
+-- Run this INSTEAD of the CREATE TABLE above on a database that already exists.
+-- Safe to run more than once.
+
+-- work_preference: single text -> text[]
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_preferences'
+      AND column_name = 'work_preference'
+      AND data_type <> 'ARRAY'
+  ) THEN
+    ALTER TABLE user_preferences DROP CONSTRAINT IF EXISTS user_preferences_work_preference_check;
+    ALTER TABLE user_preferences
+      ALTER COLUMN work_preference TYPE TEXT[]
+      USING CASE WHEN work_preference IS NULL THEN '{}'::TEXT[] ELSE ARRAY[work_preference] END;
+    ALTER TABLE user_preferences ALTER COLUMN work_preference SET DEFAULT '{}';
+    ALTER TABLE user_preferences
+      ADD CONSTRAINT user_preferences_work_preference_check
+      CHECK (work_preference <@ ARRAY['remote', 'on-site', 'hybrid']);
+  END IF;
+END $$;
+
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS job_titles        TEXT[] DEFAULT '{}';
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS ai_providers      TEXT[] DEFAULT '{}';
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS ai_keys_encrypted JSONB  DEFAULT '{}'::jsonb;
+
+-- Carry existing single-provider keys into the map.
+UPDATE user_preferences
+   SET ai_keys_encrypted = jsonb_build_object('groq', groq_api_key_encrypted),
+       ai_providers      = ARRAY['groq']
+ WHERE groq_api_key_encrypted IS NOT NULL
+   AND (ai_keys_encrypted IS NULL OR ai_keys_encrypted = '{}'::jsonb);
+
+-- location: drop the city key, add the worldwide flag.
+UPDATE user_preferences
+   SET location = jsonb_build_object(
+         'country',   COALESCE(location->>'country', ''),
+         'worldwide', COALESCE((location->>'worldwide')::boolean, false)
+       )
+ WHERE location ? 'city';

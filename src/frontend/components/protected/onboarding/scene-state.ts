@@ -1,0 +1,115 @@
+import type { OnboardingData } from "@/frontend/types/on-boarding";
+import { countryName } from "@/frontend/lib/configs/countries";
+import { fieldLabel } from "@/frontend/lib/configs/job-titles";
+import { aiProviderOptions, seniorityFromExperience, seniorityOptions, workOptions } from "./data";
+
+export interface ReadoutRow {
+    /** The step this line belongs to, so the panel can mark the live one. */
+    step: number;
+    label: string;
+    value: string;
+}
+
+export interface SceneState {
+    /** ISO country code to sample the tint from, or null for no flag. */
+    countryCode: string | null;
+    /** Brand hex that overrides the flag tint — step 6 only. */
+    tintOverride: string | null;
+    /** Orbits drawn around the object: one per question answered. */
+    rings: number;
+    /** Draws the object as a wireframe globe rather than a solid body. */
+    wireframe: boolean;
+    /** Big mono line under the object. */
+    caption: string;
+    readout: ReadoutRow[];
+}
+
+const EMPTY = "—";
+
+function workLabel(data: OnboardingData): string {
+    if (data.workPreference.length === 0) return EMPTY;
+    return data.workPreference
+        .map((value) => workOptions.find((o) => o.value === value)?.label ?? value)
+        .join(" · ");
+}
+
+function whereLabel(data: OnboardingData): string {
+    if (data.location.worldwide) return "Worldwide";
+    if (data.location.country) return countryName(data.location.country);
+    return EMPTY;
+}
+
+function fieldValue(data: OnboardingData): string {
+    if (!data.field) return EMPTY;
+    const level = seniorityOptions.find(
+        (o) => o.value === (data.seniority ?? seniorityFromExperience(data.experience))
+    );
+    return data.experience > 0 ? `${fieldLabel(data.field)} · ${level?.label}` : fieldLabel(data.field);
+}
+
+function roleValue(data: OnboardingData): string {
+    if (data.jobTitles.length === 0 && data.jobType.length === 0) return EMPTY;
+    if (data.jobTitles.length === 0) return `${data.jobType.length} type(s)`;
+    if (data.jobTitles.length === 1) return data.jobTitles[0];
+    return `${data.jobTitles[0]} +${data.jobTitles.length - 1}`;
+}
+
+function rangeValue(data: OnboardingData): string {
+    const { min, max, currency } = data.salary;
+    if (!min && !max) return EMPTY;
+    const fmt = (n: number) => n.toLocaleString("en-US");
+    if (min && max) return `${fmt(min)}–${fmt(max)} ${currency}`;
+    return `${min ? `${fmt(min)}+` : `up to ${fmt(max)}`} ${currency}`;
+}
+
+function aiValue(data: OnboardingData): string {
+    if (data.aiProviders.length === 0) return EMPTY;
+    return data.aiProviders
+        .map((p) => aiProviderOptions.find((o) => o.value === p)?.label ?? p)
+        .join(" · ");
+}
+
+/**
+ * Everything the scene needs, derived from the answers so far.
+ *
+ * Kept in one place rather than threaded through each step, because the whole
+ * point is that the scene reacts to the *form*, not to whichever step happens to
+ * be on screen — the readout keeps every earlier answer visible while you work.
+ */
+export function sceneState(data: OnboardingData, step: number): SceneState {
+    const readout: ReadoutRow[] = [
+        { step: 1, label: "Mode", value: workLabel(data) },
+        { step: 2, label: "Where", value: whereLabel(data) },
+        { step: 3, label: "Field", value: fieldValue(data) },
+        { step: 4, label: "Role", value: roleValue(data) },
+        { step: 5, label: "Range", value: rangeValue(data) },
+        { step: 6, label: "AI", value: aiValue(data) },
+    ];
+
+    const rings = readout.filter((row) => row.value !== EMPTY).length;
+
+    // Step 6 hands the scene over to the provider's own colour; step 2 to the
+    // flag. Everywhere else the scene keeps the product's accent.
+    const tintOverride =
+        step === 6 && data.aiProviders.length > 0
+            ? aiProviderOptions.find((o) => o.value === data.aiProviders[data.aiProviders.length - 1])?.tint ?? null
+            : null;
+
+    const captions: Record<number, string> = {
+        1: data.workPreference.length ? workLabel(data) : "Select a mode",
+        2: whereLabel(data) === EMPTY ? "Anywhere yet" : whereLabel(data),
+        3: data.field ? fieldValue(data) : "Choose a field",
+        4: roleValue(data) === EMPTY ? "Pick your roles" : roleValue(data),
+        5: rangeValue(data) === EMPTY ? "Set a range" : rangeValue(data),
+        6: aiValue(data) === EMPTY ? "Connect a provider" : aiValue(data),
+    };
+
+    return {
+        countryCode: data.location.worldwide ? null : data.location.country || null,
+        tintOverride,
+        rings,
+        wireframe: data.location.worldwide,
+        caption: captions[step] ?? "",
+        readout,
+    };
+}

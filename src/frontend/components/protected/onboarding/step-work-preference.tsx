@@ -1,41 +1,59 @@
+"use client";
+
 import { workOptions } from "./data";
 import { WorkPreference, OnboardingData } from "@/frontend/types/on-boarding";
+import { OptionRow } from "./option-row";
 
 interface StepWorkPreferenceProps {
-  workPreference: WorkPreference | null;
+  workPreference: WorkPreference[];
+  location: OnboardingData["location"];
   onUpdate: (updates: Partial<OnboardingData>) => void;
 }
 
-export function StepWorkPreference({ workPreference, onUpdate }: StepWorkPreferenceProps) {
-  const handleSelect = (preference: WorkPreference) => {
-    onUpdate({ workPreference: preference });
+export function StepWorkPreference({
+  workPreference,
+  location,
+  onUpdate,
+}: StepWorkPreferenceProps) {
+  const handleToggle = (preference: WorkPreference) => {
+    const next = workPreference.includes(preference)
+      ? workPreference.filter((p) => p !== preference)
+      : [...workPreference, preference];
+
+    /*
+     * Someone who will only work remotely has no country to answer with, so the
+     * next step is pre-answered as worldwide rather than asking a question with
+     * no meaningful answer. Adding any on-site arrangement puts the question
+     * back, because now a location genuinely matters.
+     */
+    const remoteOnly = next.length === 1 && next[0] === "remote";
+
+    onUpdate({
+      workPreference: next,
+      location: remoteOnly
+        ? { country: "", worldwide: true }
+        : { ...location, worldwide: false },
+    });
   };
+
   return (
-    <div className="space-y-3">
-      {workOptions.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => handleSelect(opt.value)}
-          className={`w-full p-5 rounded-xl border transition-all text-left flex items-center gap-4 group ${
-            workPreference === opt.value
-              ? "border-accent bg-(--accent-bg)"
-              : "border-border-standard bg-white/2 hover:bg-white/4 hover:border-border-strong"
-          }`}
-        >
-          <span className="text-2xl">{opt.icon}</span>
-          <div>
-            <div className={`font-semibold text-base mb-0.5 ${workPreference === opt.value ? "text-accent-text" : ""}`}>
-              {opt.label}
-            </div>
-            <div className="text-sm text-(--fg-tertiary)">{opt.description}</div>
-          </div>
-          {workPreference === opt.value && (
-            <div className="ml-auto w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
-              <div className="w-2 h-2 rounded-full bg-(--bg-canvas)" />
-            </div>
-          )}
-        </button>
-      ))}
+    <div>
+      <div>
+        {workOptions.map((opt, i) => (
+          <OptionRow
+            key={opt.value}
+            index={i + 1}
+            label={opt.label}
+            hint={opt.description}
+            selected={workPreference.includes(opt.value)}
+            onClick={() => handleToggle(opt.value)}
+          />
+        ))}
+      </div>
+
+      <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-quaternary">
+        Multiple allowed · remote alone searches worldwide
+      </p>
     </div>
   );
 }

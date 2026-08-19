@@ -1,50 +1,74 @@
-import { WorkPreference, OnboardingData } from "@/frontend/types/on-boarding";
-import { inputClass } from "./styles";
+"use client";
+
+import { useMemo } from "react";
+import { OnboardingData } from "@/frontend/types/on-boarding";
+import { Select } from "@/frontend/components/shared/select";
+import { Flag } from "@/frontend/components/shared/flag";
+import { countries } from "@/frontend/lib/configs/countries";
+import { OptionRow } from "./option-row";
+import { labelClass } from "./styles";
 
 interface StepLocationProps {
-  location: { country: string; city: string };
-  workPreference: WorkPreference | null;
+  location: OnboardingData["location"];
   onUpdate: (updates: Partial<OnboardingData>) => void;
 }
 
-export function StepLocation({
-  location,
-  workPreference,
-  onUpdate,
-}: StepLocationProps) {
-  const handleCountryChange = (country: string) => {
-    onUpdate({ location: { ...location, country } });
-  };
+export function StepLocation({ location, onUpdate }: StepLocationProps) {
+  /*
+   * 246 rows, each with an <img>. Built once rather than per render, and the
+   * flags themselves are lazy — only the ones scrolled into the open list load.
+   */
+  const options = useMemo(
+    () =>
+      countries.map((country) => ({
+        value: country.code,
+        label: country.name,
+        keywords: country.code,
+        icon: <Flag code={country.code} />,
+      })),
+    []
+  );
 
-  const handleCityChange = (city: string) => {
-    onUpdate({ location: { ...location, city } });
+  const setWorldwide = (worldwide: boolean) => {
+    onUpdate({ location: { ...location, worldwide } });
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div>
-        <label className="block text-sm font-medium mb-2 text-fg-secondary">Country</label>
-        <input
-          type="text"
-          value={location.country}
-          onChange={(e) => handleCountryChange(e.target.value)}
-          placeholder="e.g., Egypt"
-          className={inputClass}
+        <OptionRow
+          index={1}
+          label="Worldwide"
+          hint="Remote roles, no country filter"
+          selected={location.worldwide}
+          onClick={() => setWorldwide(true)}
+        />
+        <OptionRow
+          index={2}
+          label="Specific country"
+          hint="Narrow to one market"
+          selected={!location.worldwide}
+          onClick={() => setWorldwide(false)}
         />
       </div>
-      <div>
-        <label className="block text-sm font-medium mb-2 text-fg-secondary">
-          City{" "}
-          {workPreference === "remote" && (
-            <span className="text-fg-quaternary font-normal">(optional for remote)</span>
-          )}
-        </label>
-        <input
-          type="text"
-          value={location.city}
-          onChange={(e) => handleCityChange(e.target.value)}
-          placeholder="e.g., Cairo"
-          className={inputClass}
+
+      {/*
+        The country picker fades back rather than disappearing when the search is
+        worldwide — the scene beside it is already carrying the answer, and a
+        control that vanishes makes the layout jump on every toggle.
+      */}
+      <div
+        className={`transition-opacity duration-500 ${location.worldwide ? "opacity-35" : "opacity-100"}`}
+      >
+        <label className={labelClass}>Country</label>
+        <Select
+          value={location.country}
+          onChange={(country) => onUpdate({ location: { country, worldwide: false } })}
+          options={options}
+          disabled={location.worldwide}
+          placeholder={`Search ${countries.length} countries…`}
+          searchPlaceholder="Type a country name…"
+          ariaLabel="Country"
         />
       </div>
     </div>

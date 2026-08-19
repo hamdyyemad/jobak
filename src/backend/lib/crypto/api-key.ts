@@ -1,5 +1,8 @@
-// AES-256-GCM encryption for Groq API keys stored in Supabase.
+// AES-256-GCM encryption for the AI provider API keys stored in Supabase.
 // ENCRYPTION_SECRET must be a 32-byte hex string (64 hex chars) in env.
+//
+// Was groq-key.ts, when Groq was the only provider. The algorithm is unchanged,
+// so values encrypted under the old name still decrypt here.
 
 const ALG = "AES-GCM";
 
@@ -31,7 +34,7 @@ async function getKey(): Promise<CryptoKey> {
   );
 }
 
-export async function encryptGroqKey(plaintext: string): Promise<string> {
+export async function encryptApiKey(plaintext: string): Promise<string> {
   const key = await getKey();
   const ivBuffer = crypto.getRandomValues(new Uint8Array(12)).buffer as ArrayBuffer;
   const encoded = new TextEncoder().encode(plaintext);
@@ -43,7 +46,7 @@ export async function encryptGroqKey(plaintext: string): Promise<string> {
   return `${bufferToHex(ivBuffer)}:${bufferToHex(ciphertext)}`;
 }
 
-export async function decryptGroqKey(encrypted: string): Promise<string> {
+export async function decryptApiKey(encrypted: string): Promise<string> {
   const [ivHex, ciphertextHex] = encrypted.split(":");
   if (!ivHex || !ciphertextHex) throw new Error("Invalid encrypted key format");
   const key = await getKey();
