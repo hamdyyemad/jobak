@@ -4,51 +4,64 @@ interface FooterLink {
     badge?: string;
 }
 
-interface FooterSection {
-    title: string;
-    links: FooterLink[];
-}
+/**
+ * Columns are either navigation ("links") or plain information ("facts").
+ * Facts render as static text, not anchors, so nothing here looks like a link
+ * that leads nowhere.
+ */
+export type FooterColumn =
+    | { title: string; kind: "links"; links: FooterLink[] }
+    | { title: string; kind: "facts"; items: string[]; note?: string };
 
-export const footerSections: FooterSection[] = [
+/**
+ * Only pages that actually exist are linked here. Anything that needs a feature
+ * we have not built (blog, careers, status page, public API docs) stays out until
+ * it does — see PRE_PRODUCTION.md for what is still outstanding.
+ */
+export const footerColumns: FooterColumn[] = [
     {
         title: "Product",
+        kind: "links",
         links: [
-            { name: "How it works", href: "#how-it-works" },
-            { name: "Features", href: "#features" },
-            { name: "Pricing", href: "#pricing" },
-            { name: "Job sources", href: "#integrations" },
+            { name: "How it works", href: "/how-it-works" },
+            { name: "Features", href: "/features" },
+            { name: "Dashboard", href: "/#dashboard" },
+            { name: "Cost", href: "/#cost" },
         ],
     },
     {
         title: "Resources",
+        kind: "links",
         links: [
-            { name: "Get started", href: "/onboarding" },
-            { name: "Dashboard", href: "/dashboard" },
-            { name: "API docs", href: "#" },
-            { name: "Status", href: "#" },
-        ],
-    },
-    {
-        title: "Company",
-        links: [
-            { name: "About", href: "#" },
-            { name: "Blog", href: "#" },
-            { name: "Careers", href: "#", badge: "Hiring" },
-            { name: "Contact", href: "#" },
-        ],
-    },
-    {
-        title: "Legal",
-        links: [
-            { name: "Privacy", href: "#" },
-            { name: "Terms", href: "#" },
-            { name: "Security", href: "#" },
+            { name: "FAQ", href: "/faq" },
+            { name: "About", href: "/about" },
         ],
     },
 ];
 
-export const socialLinks = [
-    { name: "Twitter", href: "#" },
-    { name: "GitHub", href: "#" },
-    { name: "LinkedIn", href: "#" },
+/** Short, concrete facts about the product — sits under the brand blurb. */
+export const brandFacts: string[] = [
+    "Every match scored 0–100 by AI",
+    "Free — you bring your own Groq key",
+    "Open source, MIT licensed",
 ];
+
+export const socialLinks = [
+    { name: "LinkedIn", href: "https://www.linkedin.com/company/jobak_ai" },
+];
+
+export interface SupportWallet {
+    /** Shown verbatim next to the address — the network must never be ambiguous. */
+    network: string;
+    address: string;
+}
+
+/**
+ * Tip wallets shown in the footer's support strip.
+ *
+ * Intentionally EMPTY: the strip renders nothing while this list is empty, so a
+ * placeholder address can never ship. Add real addresses only — a single wrong
+ * character sends funds nowhere, and USDT on different chains is not
+ * interchangeable, so `network` must exactly match the chain of `address`.
+ */
+export const supportWallets: SupportWallet[] = [];

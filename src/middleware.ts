@@ -30,7 +30,18 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+
+  // Safety net for OAuth. If `redirect_to` is not on Supabase's allowlist,
+  // Supabase falls back to the configured Site URL and drops the user on a page
+  // that never reads the code, so sign-in silently does nothing. Forward any
+  // stray code to the handler that knows how to exchange it.
+  const STRAY_CODE_PATHS = ["/", "/login", "/register"];
+  if (searchParams.has("code") && STRAY_CODE_PATHS.includes(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    return NextResponse.redirect(url);
+  }
 
   const isDashboard = pathname.startsWith("/dashboard");
   const isOnboarding = pathname.startsWith("/onboarding");

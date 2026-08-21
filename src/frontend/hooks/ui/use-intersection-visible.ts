@@ -53,7 +53,7 @@ export function useIntersectionVisible<T extends HTMLElement = HTMLElement>({
 
     useEffect(() => {
         const element = ref.current;
-        if (!element || isVisible) return;
+        if (!element) return;
 
         const observer = new IntersectionObserver(
             ([entry]) => {
@@ -61,9 +61,9 @@ export function useIntersectionVisible<T extends HTMLElement = HTMLElement>({
                     setIsVisible(true);
 
                     // Optimization: Stop watching this element once it's visible
-                    if (triggerOnce && element) {
-                        observer.unobserve(element);
-                    }
+                    if (triggerOnce) observer.unobserve(element);
+                } else if (!triggerOnce) {
+                    setIsVisible(false);
                 }
             },
             { threshold, rootMargin }
@@ -71,11 +71,8 @@ export function useIntersectionVisible<T extends HTMLElement = HTMLElement>({
 
         observer.observe(element);
 
-        return () => {
-            if (element) observer.unobserve(element);
-            observer.disconnect();
-        };
-    }, [threshold, rootMargin, triggerOnce, isVisible]);
+        return () => observer.disconnect();
+    }, [threshold, rootMargin, triggerOnce]);
 
     return { ref, isVisible };
 }

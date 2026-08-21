@@ -47,7 +47,6 @@ function CodeContent({ code, activeStep }: CodeContentProps) {
             line={line}
             lineNumber={lineIndex + 1}
             lineIndex={lineIndex}
-            activeStep={activeStep}
           />
         ))}
       </pre>
@@ -59,12 +58,9 @@ interface CodeLineProps {
   line: string;
   lineNumber: number;
   lineIndex: number;
-  activeStep: number;
 }
 
-function CodeLine({ line, lineNumber, lineIndex, activeStep }: CodeLineProps) {
-  const chars = line.split("");
-
+function CodeLine({ line, lineNumber, lineIndex }: CodeLineProps) {
   return (
     <div
       className="leading-loose code-line-reveal"
@@ -73,41 +69,7 @@ function CodeLine({ line, lineNumber, lineIndex, activeStep }: CodeLineProps) {
       <span className="text-background/20 select-none w-8 inline-block">
         {lineNumber}
       </span>
-      <span className="inline-flex">
-        {chars.map((char, charIndex) => (
-          <span
-            key={`${activeStep}-${lineIndex}-${charIndex}`}
-            className="code-char-reveal"
-            style={{ animationDelay: `${lineIndex * 80 + charIndex * 15}ms` }}
-          >
-            {char === " " ? " " : char}
-          </span>
-        ))}
-      </span>
-      <style jsx>{`
-        .code-line-reveal {
-          opacity: 0;
-          transform: translateX(-8px);
-          animation: lineReveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-        @keyframes lineReveal {
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        .code-char-reveal {
-          opacity: 0;
-          filter: blur(8px);
-          animation: charReveal 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-        @keyframes charReveal {
-          to {
-            opacity: 1;
-            filter: blur(0);
-          }
-        }
-      `}</style>
+      <span>{line}</span>
     </div>
   );
 }

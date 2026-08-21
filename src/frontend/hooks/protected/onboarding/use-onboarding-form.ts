@@ -2,15 +2,19 @@ import { useState } from "react";
 import { OnboardingData } from "@/frontend/types/on-boarding";
 
 const initialData: OnboardingData = {
-    workPreference: null,
-    location: { country: "", city: "" },
+    workPreference: [],
+    location: { countries: [], worldwide: false },
     field: "",
     skills: [],
     experience: 0,
     jobType: [],
+    jobTitles: [],
+    // null until the user overrides it — otherwise the value derived from
+    // `experience` is what gets submitted.
     seniority: null,
-    salary: { min: 0, max: 0, currency: "USD" },
-    apiKey: "",
+    aiProviders: [],
+    aiKeys: {},
+    apifyKey: "",
 };
 
 export function useOnboardingForm() {
