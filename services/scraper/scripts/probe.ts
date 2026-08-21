@@ -5,7 +5,7 @@
  * nothing when the contract lives on someone else's server. Run it after any
  * adapter change, and whenever a source starts returning zero in production.
  *
- *   cd scraper && npx tsx scripts/probe.ts
+ *   cd services/scraper && npx tsx scripts/probe.ts
  *   npx tsx scripts/probe.ts wuzzuf linkedin      # just these
  */
 import { runSources, sources } from "../src/sources/index.js";

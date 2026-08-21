@@ -11,7 +11,7 @@ want it consumed.
 
 A **separate Vercel project** from the main app, pointed at this directory:
 
-1. New Project → same repository → **Root Directory: `scraper`**
+1. New Project → same repository → **Root Directory: `services/scraper`**
 2. Framework preset: **Other** (the `api/` folder is picked up automatically)
 3. Environment variable: `SCRAPER_SECRET` — see `.env.example`
 
