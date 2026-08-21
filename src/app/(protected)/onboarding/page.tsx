@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import {
   useKeyVerification,
   useOnboardingForm,
@@ -17,9 +17,9 @@ import {
   StepLocation,
   StepFieldSkills,
   StepJobPreferences,
-  StepSalary,
   StepApiKey,
   sceneState,
+  validateStep,
 } from "@/frontend/components/protected/onboarding";
 import {
   stepKickers,
@@ -48,20 +48,36 @@ export default function OnboardingPage() {
   const tint = useSceneTint(scene.countryCode, scene.tintOverride);
 
   /*
-   * Two independent requirements, both verified rather than merely filled in.
-   * The AI check is scoped to the providers still selected — verifying a key and
-   * then deselecting that provider would otherwise leave the finish button
-   * enabled with nothing to submit.
+   * Only the model key is required now. Job collection runs on the self-hosted
+   * scraper's free sources; Apify buys LinkedIn and Indeed on top, so an empty
+   * token costs coverage rather than blocking the flow.
+   *
+   * Scoped to providers still selected — verifying a key and then deselecting
+   * that provider would otherwise leave the finish button enabled with nothing
+   * to submit.
    */
-  const apifyVerified = statusOf("apify").status === "valid";
-  const hasVerifiedAi = data.aiProviders.some(
+  const canSubmit = data.aiProviders.some(
     (provider) => statusOf(provider).status === "valid"
   );
-  const canSubmit = apifyVerified && hasVerifiedAi;
+  const submitHint = "Verify at least one model key to finish";
 
-  const submitHint = !apifyVerified
-    ? "Verify your Apify token to finish"
-    : "Verify at least one model key";
+  /*
+   * Which step the user last tried to leave with something missing. Storing the
+   * step number rather than a boolean means the message clears itself two ways —
+   * moving to another step, or fixing the answer — with no effect to reset it.
+   */
+  const [blockedAt, setBlockedAt] = useState<number | null>(null);
+  const check = validateStep(data, step);
+  const showValidation = blockedAt === step && !check.ok;
+
+  const handleGuardedNext = () => {
+    if (!check.ok) {
+      setBlockedAt(step);
+      return;
+    }
+    setBlockedAt(null);
+    handleNext();
+  };
 
   const travel = {
     ...tint,
@@ -136,9 +152,7 @@ export default function OnboardingPage() {
               />
             )}
 
-            {step === 5 && <StepSalary salary={data.salary} onUpdate={updateData} />}
-
-            {step === 6 && (
+            {step === 5 && (
               <StepApiKey
                 aiProviders={data.aiProviders}
                 aiKeys={data.aiKeys}
@@ -148,6 +162,20 @@ export default function OnboardingPage() {
                 onResetCheck={reset}
                 onUpdate={updateData}
               />
+            )}
+
+            {/*
+              Only shown after a blocked attempt to continue — not while the step
+              is merely incomplete, which would scold the user for not having
+              finished typing yet.
+            */}
+            {showValidation && !check.ok && (
+              <p
+                role="alert"
+                className="chip-in mt-6 flex items-center gap-2 border-l-2 border-(--status-rose) py-2 pl-4 font-mono text-[10px] uppercase tracking-[0.18em] text-(--status-rose)"
+              >
+                {check.message}
+              </p>
             )}
 
             {submitError && (
@@ -173,7 +201,7 @@ export default function OnboardingPage() {
         canSubmit={canSubmit}
         submitHint={submitHint}
         onBack={handleBack}
-        onNext={handleNext}
+        onNext={handleGuardedNext}
         onSubmit={() => handleSubmit(data)}
       />
     </div>

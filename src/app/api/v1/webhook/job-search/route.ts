@@ -50,18 +50,19 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * Apify is mandatory: it runs the actors that collect the listings, so a
-     * submission without it produces a workflow with nothing to score. Only the
-     * format is enforced here — the live check already happened at /ai/verify-key,
-     * and re-probing on submit would double every provider's rate limit.
+     * Apify is optional: the self-hosted scraper covers the free sources, and a
+     * token only adds LinkedIn and Indeed. A malformed one is still rejected —
+     * storing a token that cannot work is worse than storing none.
      */
     const apifyKey = typeof body.apifyKey === "string" ? body.apifyKey.trim() : "";
-    const apifyFormat = checkKeyFormat("apify", apifyKey);
-    if (!apifyFormat.ok) {
-      return NextResponse.json(
-        { error: `Apify token is required. ${apifyFormat.reason}` },
-        { status: 400 }
-      );
+    if (apifyKey) {
+      const apifyFormat = checkKeyFormat("apify", apifyKey);
+      if (!apifyFormat.ok) {
+        return NextResponse.json(
+          { error: `That Apify token can't be used. ${apifyFormat.reason}` },
+          { status: 400 }
+        );
+      }
     }
 
     // ── 3. Encrypt every key + persist preferences ────────────
@@ -69,12 +70,34 @@ export async function POST(request: NextRequest) {
     for (const [provider, key] of keyEntries) {
       encryptedKeys[provider] = await encryptApiKey(key.trim());
     }
-    const encryptedApifyKey = await encryptApiKey(apifyKey);
+    const encryptedApifyKey = apifyKey ? await encryptApiKey(apifyKey) : null;
 
-    const location = {
-      country: body.location?.country ?? "",
-      worldwide: Boolean(body.location?.worldwide),
-    };
+    /*
+     * `countries` is a list now. A single-country payload from an older client
+     * is folded into a one-element list rather than rejected.
+     */
+    const rawCountries = body.location?.countries ?? body.location?.country;
+    const countries: string[] = Array.isArray(rawCountries)
+      ? rawCountries.filter((c: unknown) => typeof c === "string" && c)
+      : [rawCountries].filter((c: unknown) => typeof c === "string" && c);
+
+    const location = { countries, worldwide: Boolean(body.location?.worldwide) };
+
+    // A specific search has to name somewhere. The form blocks this, but the
+    // form is not the guard.
+    if (!location.worldwide && countries.length === 0) {
+      return NextResponse.json(
+        { error: "Select at least one country, or choose worldwide." },
+        { status: 400 }
+      );
+    }
+
+    if (!Array.isArray(body.jobTitles) || body.jobTitles.length === 0) {
+      return NextResponse.json(
+        { error: "At least one target job title is required." },
+        { status: 400 }
+      );
+    }
 
     const service = createServiceClient();
     const { error: upsertError } = await service
@@ -90,7 +113,6 @@ export async function POST(request: NextRequest) {
           job_types: body.jobType ?? [],
           job_titles: body.jobTitles ?? [],
           seniority: body.seniority ?? "mid",
-          salary: body.salary ?? { min: 0, max: 0, currency: "USD" },
           ai_providers: keyEntries.map(([provider]) => provider),
           ai_keys_encrypted: encryptedKeys,
           apify_key_encrypted: encryptedApifyKey,
@@ -132,7 +154,6 @@ export async function POST(request: NextRequest) {
       jobType: body.jobType ?? [],
       jobTitles: body.jobTitles ?? [],
       seniority: body.seniority ?? "mid",
-      salary: body.salary ?? { min: 0, max: 0, currency: "USD" },
       // Plaintext keys go to n8n so it can call the provider — n8n is server-side
       // only. The first provider picked is the one the workflow should prefer.
       aiProvider: keyEntries[0][0],

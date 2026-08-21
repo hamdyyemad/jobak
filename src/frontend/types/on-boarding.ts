@@ -17,11 +17,12 @@ export interface OnboardingData {
     /** Multi-select: someone can be open to remote *and* hybrid. */
     workPreference: WorkPreference[];
     /**
-     * `worldwide` is its own flag rather than an empty country, so "I have not
+     * `worldwide` is its own flag rather than an empty list, so "I have not
      * answered yet" stays distinct from "anywhere is fine". Remote-only searches
-     * default it to true.
+     * default it to true. `countries` is a list because people genuinely search
+     * more than one market at once.
      */
-    location: { country: string; worldwide: boolean };
+    location: { countries: string[]; worldwide: boolean };
     field: string;
     skills: string[];
     experience: number;
@@ -29,7 +30,6 @@ export interface OnboardingData {
     jobTitles: string[];
     /** Derived from `experience` unless the user overrides it. */
     seniority: Seniority | null;
-    salary: { min: number; max: number; currency: string };
     /** Scoring models the user opted into, in pick order. At least one required. */
     aiProviders: AiProvider[];
     /** Keyed by provider so a key survives deselecting and reselecting. */

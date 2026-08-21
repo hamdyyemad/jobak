@@ -3,7 +3,7 @@ import { OnboardingData } from "@/frontend/types/on-boarding";
 
 const initialData: OnboardingData = {
     workPreference: [],
-    location: { country: "", worldwide: false },
+    location: { countries: [], worldwide: false },
     field: "",
     skills: [],
     experience: 0,
@@ -12,7 +12,6 @@ const initialData: OnboardingData = {
     // null until the user overrides it — otherwise the value derived from
     // `experience` is what gets submitted.
     seniority: null,
-    salary: { min: 0, max: 0, currency: "USD" },
     aiProviders: [],
     aiKeys: {},
     apifyKey: "",

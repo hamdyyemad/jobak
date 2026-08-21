@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ─────────────────────────────────────────────────────────────\n// EDIT THESE BEFORE ACTIVATING\n// ─────────────────────────────────────────────────────────────\nconst WEBHOOK_SECRET = 'CHANGE_ME_same_as_N8N_WEBHOOK_SECRET';\nconst SUPABASE_URL   = 'https://YOUR-PROJECT.supabase.co';\nconst SUPABASE_KEY   = 'YOUR_SERVICE_ROLE_KEY';\n\n// Apify actors. Slugs verified against the Apify store; input schemas are\n// pinned to what each actor's build actually declares.\nconst ACTOR_LINKEDIN = 'bebity~linkedin-jobs-scraper';\nconst ACTOR_INDEED   = 'misceres~indeed-scraper';\n\n// How many listings to pull per source, per run. Apify bills by compute unit,\n// and the user's own token pays — keep this modest.\nconst ROWS_PER_SOURCE = 50;\n\n// Jobs sent to the model in one request. Scoring one job per call (the v1\n// behaviour) meant N API calls per run; batching cuts that by ~15x.\nconst SCORE_BATCH_SIZE = 15;\n\n// Model per provider. The user chooses the provider in onboarding; this maps\n// that choice to a model id. Change any of these to trade cost for quality —\n// it is the user's own key being billed.\nconst MODELS = {\n  anthropic: 'claude-opus-5',\n  openai:    'gpt-4o-mini',\n  gemini:    'gemini-2.0-flash',\n  groq:      'llama-3.3-70b-versatile'\n};\n\nreturn { json: {\n  webhookSecret: WEBHOOK_SECRET,\n  supabaseUrl:   SUPABASE_URL,\n  supabaseKey:   SUPABASE_KEY,\n  actorLinkedIn: ACTOR_LINKEDIN,\n  actorIndeed:   ACTOR_INDEED,\n  rowsPerSource: ROWS_PER_SOURCE,\n  scoreBatchSize: SCORE_BATCH_SIZE,\n  models: MODELS\n} };"
+        "jsCode": "// ─────────────────────────────────────────────────────────────\n// EDIT THESE BEFORE ACTIVATING\n// ─────────────────────────────────────────────────────────────\nconst WEBHOOK_SECRET = 'CHANGE_ME_same_as_N8N_WEBHOOK_SECRET';\nconst SUPABASE_URL   = 'https://YOUR-PROJECT.supabase.co';\nconst SUPABASE_KEY   = 'YOUR_SERVICE_ROLE_KEY';\n\n// The self-hosted scraper (see scraper/README.md). Free sources, no per-request\n// cost — this is the primary collector.\nconst SCRAPER_URL    = 'https://YOUR-SCRAPER.vercel.app';\nconst SCRAPER_SECRET = 'CHANGE_ME_same_as_SCRAPER_SECRET';\n\n// Company slugs to pull from applicant tracking systems. First-party listings,\n// highest quality of anything here, free — but you must name the companies.\nconst ATS = {\n  greenhouse: [],\n  ashby: [],\n  workable: []\n};\n\n// Apify is now OPTIONAL and only worth running for LinkedIn and Indeed, which\n// need residential IPs. Skipped entirely when the user connected no token.\n// Slugs verified against the Apify store; input schemas are pinned to what each\n// actor's build actually declares.\nconst ACTOR_LINKEDIN = 'bebity~linkedin-jobs-scraper';\nconst ACTOR_INDEED   = 'misceres~indeed-scraper';\n\n// How many listings to pull per source, per run. Apify bills by compute unit,\n// and the user's own token pays — keep this modest.\nconst ROWS_PER_SOURCE = 50;\n\n// Jobs sent to the model in one request. Scoring one job per call (the v1\n// behaviour) meant N API calls per run; batching cuts that by ~15x.\nconst SCORE_BATCH_SIZE = 15;\n\n// Model per provider. The user chooses the provider in onboarding; this maps\n// that choice to a model id. Change any of these to trade cost for quality —\n// it is the user's own key being billed.\nconst MODELS = {\n  anthropic: 'claude-opus-5',\n  openai:    'gpt-4o-mini',\n  gemini:    'gemini-2.0-flash',\n  groq:      'llama-3.3-70b-versatile'\n};\n\nreturn { json: {\n  webhookSecret: WEBHOOK_SECRET,\n  supabaseUrl:   SUPABASE_URL,\n  supabaseKey:   SUPABASE_KEY,\n  scraperUrl:    SCRAPER_URL,\n  scraperSecret: SCRAPER_SECRET,\n  ats:           ATS,\n  actorLinkedIn: ACTOR_LINKEDIN,\n  actorIndeed:   ACTOR_INDEED,\n  rowsPerSource: ROWS_PER_SOURCE,\n  scoreBatchSize: SCORE_BATCH_SIZE,\n  models: MODELS\n} };"
       },
       "id": "set-config",
       "name": "Set Config",
@@ -83,7 +83,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Normalises the v2 payload from /api/v1/webhook/job-search.\n//\n// Changed since v1 and worth knowing: `workPreference` is an ARRAY, `location`\n// is `{ countries: [<ISO alpha-2>, …], worldwide: bool }` (no `city`, and\n// `country` became a list), `salary` is gone entirely, there is a new\n// `jobTitles` array, and credentials arrive as `aiKeys` + `apifyKey` rather\n// than a single `groqApiKey`.\nconst body   = $('Webhook Trigger').first().json.body || {};\nconst config = $('Set Config').first().json;\n\n// `location.countries` is a list — the picker is multi-select. A single-country\n// payload from an older client still works.\nconst rawCountries = body.location?.countries ?? body.location?.country;\nconst countryCodes = (Array.isArray(rawCountries) ? rawCountries : [rawCountries])\n  .filter(Boolean)\n  .map(c => String(c).toUpperCase());\nconst worldwide = Boolean(body.location?.worldwide);\n\n// Onboarding stores ISO codes; the scrapers want human names. Intl ships with\n// Node, so no country table has to be maintained here.\nconst display = (() => {\n  try { return new Intl.DisplayNames(['en'], { type: 'region' }); }\n  catch (e) { return null; }\n})();\nconst countries = countryCodes.map(code => ({\n  code,\n  name: (display && display.of(code)) || code\n}));\n\nconst aiKeys = body.aiKeys || {};\n// Prefer the provider the app nominated, but only if its key actually arrived.\nconst aiProvider = (body.aiProvider && aiKeys[body.aiProvider])\n  ? body.aiProvider\n  : Object.keys(aiKeys)[0];\n\nif (!aiProvider)     throw new Error('No AI provider key in payload — cannot score.');\nif (!body.apifyKey)  throw new Error('No Apify token in payload — cannot collect.');\n\n// Field arrives as a slug (\"software-engineering\"); turn it back into words.\nconst fieldWords = String(body.field || '')\n  .split('-').filter(Boolean)\n  .map(w => w.charAt(0).toUpperCase() + w.slice(1))\n  .join(' ');\n\nconst jobTitles = Array.isArray(body.jobTitles) ? body.jobTitles.filter(Boolean) : [];\n\nreturn { json: {\n  userId:         body.userId,\n  workPreference: Array.isArray(body.workPreference) ? body.workPreference : [body.workPreference].filter(Boolean),\n  worldwide,\n  countries,\n  field:          body.field || '',\n  fieldWords:     fieldWords || 'Software Engineering',\n  jobTitles,\n  skills:         body.skills || [],\n  experience:     body.experience || 0,\n  jobType:        body.jobType || [],\n  seniority:      body.seniority || 'mid',\n  aiProvider,\n  aiApiKey:       aiKeys[aiProvider],\n  aiModel:        config.models[aiProvider],\n  apifyKey:       body.apifyKey,\n  supabaseUrl:    config.supabaseUrl,\n  supabaseKey:    config.supabaseKey,\n  actorLinkedIn:  config.actorLinkedIn,\n  actorIndeed:    config.actorIndeed,\n  rowsPerSource:  config.rowsPerSource,\n  scoreBatchSize: config.scoreBatchSize,\n  timestamp:      new Date().toISOString()\n} };"
+        "jsCode": "// Normalises the v2 payload from /api/v1/webhook/job-search.\n//\n// Changed since v1 and worth knowing: `workPreference` is an ARRAY, `location`\n// is `{ countries: [<ISO alpha-2>, …], worldwide: bool }` (no `city`, and\n// `country` became a list), `salary` is gone entirely, there is a new\n// `jobTitles` array, and credentials arrive as `aiKeys` + `apifyKey` rather\n// than a single `groqApiKey`.\nconst body   = $('Webhook Trigger').first().json.body || {};\nconst config = $('Set Config').first().json;\n\n// `location.countries` is a list — the picker is multi-select. A single-country\n// payload from an older client still works.\nconst rawCountries = body.location?.countries ?? body.location?.country;\nconst countryCodes = (Array.isArray(rawCountries) ? rawCountries : [rawCountries])\n  .filter(Boolean)\n  .map(c => String(c).toUpperCase());\nconst worldwide = Boolean(body.location?.worldwide);\n\n// Onboarding stores ISO codes; the scrapers want human names. Intl ships with\n// Node, so no country table has to be maintained here.\nconst display = (() => {\n  try { return new Intl.DisplayNames(['en'], { type: 'region' }); }\n  catch (e) { return null; }\n})();\nconst countries = countryCodes.map(code => ({\n  code,\n  name: (display && display.of(code)) || code\n}));\n\nconst aiKeys = body.aiKeys || {};\n// Prefer the provider the app nominated, but only if its key actually arrived.\nconst aiProvider = (body.aiProvider && aiKeys[body.aiProvider])\n  ? body.aiProvider\n  : Object.keys(aiKeys)[0];\n\nif (!aiProvider) throw new Error('No AI provider key in payload — cannot score.');\n\n// Apify is optional now: the self-hosted scraper covers the free sources, and\n// Apify only adds LinkedIn/Indeed. No token simply means those are skipped.\nconst apifyKey = body.apifyKey || '';\n\n// Field arrives as a slug (\"software-engineering\"); turn it back into words.\nconst fieldWords = String(body.field || '')\n  .split('-').filter(Boolean)\n  .map(w => w.charAt(0).toUpperCase() + w.slice(1))\n  .join(' ');\n\nconst jobTitles = Array.isArray(body.jobTitles) ? body.jobTitles.filter(Boolean) : [];\n\nreturn { json: {\n  userId:         body.userId,\n  workPreference: Array.isArray(body.workPreference) ? body.workPreference : [body.workPreference].filter(Boolean),\n  worldwide,\n  countries,\n  field:          body.field || '',\n  fieldWords:     fieldWords || 'Software Engineering',\n  jobTitles,\n  skills:         body.skills || [],\n  experience:     body.experience || 0,\n  jobType:        body.jobType || [],\n  seniority:      body.seniority || 'mid',\n  aiProvider,\n  aiApiKey:       aiKeys[aiProvider],\n  aiModel:        config.models[aiProvider],\n  apifyKey,\n  useApify:       Boolean(apifyKey),\n  scraperUrl:     config.scraperUrl,\n  scraperSecret:  config.scraperSecret,\n  ats:            config.ats,\n  supabaseUrl:    config.supabaseUrl,\n  supabaseKey:    config.supabaseKey,\n  actorLinkedIn:  config.actorLinkedIn,\n  actorIndeed:    config.actorIndeed,\n  rowsPerSource:  config.rowsPerSource,\n  scoreBatchSize: config.scoreBatchSize,\n  timestamp:      new Date().toISOString()\n} };"
       },
       "id": "extract-preferences",
       "name": "Extract Preferences",
@@ -96,7 +96,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Builds each actor's input from the user's preferences.\n//\n// Enum values below are taken from the actors' published input schemas, not\n// guessed: LinkedIn workType 1/2/3 = On-Site/Remote/Hybrid, contractType\n// F/P/C/T/I/V, experienceLevel 1..5, publishedAt r86400/r604800/r2592000.\nconst p = $input.item.json;\n\n// Search term: a chosen job title beats the broad field — it is what the user\n// actually asked for. Extra titles are dropped; both actors take one query.\nconst searchTerm = p.jobTitles[0] || p.fieldWords;\n\n// Only constrain workplace type when the user picked exactly one. With several\n// selected, filtering to one would hide the others; the model filters later.\nconst workTypeMap = { 'remote': '2', 'on-site': '1', 'hybrid': '3' };\nconst workType = p.workPreference.length === 1 ? (workTypeMap[p.workPreference[0]] || '') : '';\n\nconst contractMap = { 'full-time': 'F', 'part-time': 'P', 'contract': 'C', 'freelance': 'C' };\nconst contractType = p.jobType.length === 1 ? (contractMap[p.jobType[0]] || '') : '';\n\nconst experienceMap = { entry: '2', mid: '3', senior: '4', lead: '5' };\nconst experienceLevel = experienceMap[p.seniority] || '';\n\n// One target per selected country. `location` is required by the LinkedIn\n// actor, so a worldwide search still needs a value — LinkedIn accepts\n// \"Worldwide\" as a location in its own UI.\n//\n// Each target becomes its own item, so the Apify nodes run once per country.\n// That is the honest cost model: searching three countries runs three actor\n// jobs per source and bills the user's token three times.\nconst targets = p.worldwide || p.countries.length === 0\n  ? [{ code: '', name: 'Worldwide' }]\n  : p.countries;\n\nreturn targets.map(target => {\n  const linkedInInput = {\n    title: searchTerm,\n    location: target.name,\n    rows: p.rowsPerSource,\n    publishedAt: 'r604800',\n    proxy: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] }\n  };\n  if (workType)        linkedInInput.workType = workType;\n  if (contractType)    linkedInInput.contractType = contractType;\n  if (experienceLevel) linkedInInput.experienceLevel = experienceLevel;\n\n  const indeedInput = {\n    position: searchTerm,\n    country: target.code || 'US',\n    location: target.code ? target.name : '',\n    maxItemsPerSearch: p.rowsPerSource,\n    parseCompanyDetails: false,\n    saveOnlyUniqueItems: true,\n    followApplyRedirects: false\n  };\n\n  console.log('Target:', target.name, '| term:', searchTerm, '| workType:', workType || '(any)');\n  return { json: { ...p, target, linkedInInput, indeedInput } };\n});"
+        "jsCode": "// Builds each actor's input from the user's preferences.\n//\n// Enum values below are taken from the actors' published input schemas, not\n// guessed: LinkedIn workType 1/2/3 = On-Site/Remote/Hybrid, contractType\n// F/P/C/T/I/V, experienceLevel 1..5, publishedAt r86400/r604800/r2592000.\nconst p = $input.item.json;\n\n// Search term: a chosen job title beats the broad field — it is what the user\n// actually asked for. Extra titles are dropped; both actors take one query.\nconst searchTerm = p.jobTitles[0] || p.fieldWords;\n\n// Only constrain workplace type when the user picked exactly one. With several\n// selected, filtering to one would hide the others; the model filters later.\nconst workTypeMap = { 'remote': '2', 'on-site': '1', 'hybrid': '3' };\nconst workType = p.workPreference.length === 1 ? (workTypeMap[p.workPreference[0]] || '') : '';\n\nconst contractMap = { 'full-time': 'F', 'part-time': 'P', 'contract': 'C', 'freelance': 'C' };\nconst contractType = p.jobType.length === 1 ? (contractMap[p.jobType[0]] || '') : '';\n\nconst experienceMap = { entry: '2', mid: '3', senior: '4', lead: '5' };\nconst experienceLevel = experienceMap[p.seniority] || '';\n\n// One target per selected country. `location` is required by the LinkedIn\n// actor, so a worldwide search still needs a value — LinkedIn accepts\n// \"Worldwide\" as a location in its own UI.\n//\n// Each target becomes its own item, so the Apify nodes run once per country.\n// That is the honest cost model: searching three countries runs three actor\n// jobs per source and bills the user's token three times.\nconst targets = p.worldwide || p.countries.length === 0\n  ? [{ code: '', name: 'Worldwide' }]\n  : p.countries;\n\nreturn targets.map(target => {\n  const linkedInInput = {\n    title: searchTerm,\n    location: target.name,\n    rows: p.rowsPerSource,\n    publishedAt: 'r604800',\n    proxy: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] }\n  };\n  if (workType)        linkedInInput.workType = workType;\n  if (contractType)    linkedInInput.contractType = contractType;\n  if (experienceLevel) linkedInInput.experienceLevel = experienceLevel;\n\n  const indeedInput = {\n    position: searchTerm,\n    country: target.code || 'US',\n    location: target.code ? target.name : '',\n    maxItemsPerSearch: p.rowsPerSource,\n    parseCompanyDetails: false,\n    saveOnlyUniqueItems: true,\n    followApplyRedirects: false\n  };\n\n  console.log('Target:', target.name, '| term:', searchTerm, '| workType:', workType || '(any)');\n  return { json: { ...p, target, searchTerm, linkedInInput, indeedInput } };\n});"
       },
       "id": "build-apify-inputs",
       "name": "Build Apify Inputs",
@@ -133,7 +133,7 @@
       "typeVersion": 4.2,
       "position": [
         2400,
-        620
+        440
       ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
@@ -164,10 +164,88 @@
       "typeVersion": 4.2,
       "position": [
         2400,
-        980
+        1160
       ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.scraperUrl }}/api/scrape",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'x-scraper-secret': $json.scraperSecret, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: $json.searchTerm, countries: $json.target.code ? [$json.target] : [], worldwide: !$json.target.code, workPreference: $json.workPreference, limit: $json.rowsPerSource, ats: $json.ats }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 90000
+        }
+      },
+      "id": "scrape-free-sources",
+      "name": "Scrape Free Sources",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        800
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The scraper already returns the unified schema, so there is nothing to map —\n// only to check that it answered and to surface per-source outcomes in the log.\nconst out = [];\nfor (const item of $input.all()) {\n  const body = item.json && (Array.isArray(item.json.jobs) ? item.json : item.json.body);\n  if (!body || !Array.isArray(body.jobs)) {\n    console.log('Scraper returned no usable payload: ' + JSON.stringify(item.json).substring(0, 300));\n    continue;\n  }\n  for (const r of (body.meta?.sources || [])) {\n    console.log('  ' + r.source.padEnd(16) + (r.ok ? 'ok  ' : 'FAIL') + ' ' + r.count + ' in ' + r.ms + 'ms' + (r.error ? ' — ' + r.error : ''));\n  }\n  out.push(...body.jobs);\n}\nconsole.log('Scraper: ' + out.length + ' jobs');\nreturn out.map(j => ({ json: j }));"
+      },
+      "id": "normalize-scraper",
+      "name": "Normalize Scraper",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        800
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "apify-check",
+              "leftValue": "={{ $json.useApify }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "use-apify?",
+      "name": "Use Apify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        440
+      ]
     },
     {
       "parameters": {
@@ -179,7 +257,7 @@
       "typeVersion": 2,
       "position": [
         2640,
-        620
+        440
       ],
       "alwaysOutputData": true
     },
@@ -193,13 +271,13 @@
       "typeVersion": 2,
       "position": [
         2640,
-        980
+        1160
       ],
       "alwaysOutputData": true
     },
     {
       "parameters": {
-        "numberInputs": 2
+        "numberInputs": 3
       },
       "id": "merge-sources",
       "name": "Merge Sources",
@@ -545,12 +623,50 @@
       "main": [
         [
           {
+            "node": "Scrape Free Sources",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Use Apify?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Apify?": {
+      "main": [
+        [
+          {
             "node": "Apify - LinkedIn Jobs",
             "type": "main",
             "index": 0
           },
           {
             "node": "Apify - Indeed Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Free Sources": {
+      "main": [
+        [
+          {
+            "node": "Normalize Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Scraper": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
             "type": "main",
             "index": 0
           }
@@ -585,7 +701,7 @@
           {
             "node": "Merge Sources",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -596,7 +712,7 @@
           {
             "node": "Merge Sources",
             "type": "main",
-            "index": 1
+            "index": 2
           }
         ]
       ]

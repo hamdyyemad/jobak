@@ -21,8 +21,11 @@ neutral collection wording. What is left is not copy — it is the system itself
       `src/frontend/types/dashboard.ts` lists LinkedIn, Indeed and Glassdoor, none of
       which exist in the workflow (`src/backend/actions/jobs.ts` maps only
       1=Wuzzuf, 2=RemoteOK, 3=Remotive). Same fiction in
-      `src/frontend/components/protected/dashboard/data.ts` — `MOCK_JOBS`,
-      `SOURCE_COLORS` and `SOURCES`. Trim these to what really exists.
+      `src/frontend/components/protected/dashboard/data.ts`. `MOCK_JOBS` and the
+      hardcoded `SOURCES` list are gone — the filter row is built from the jobs
+      on screen, and `sourceColor()` falls back to neutral for unknown names.
+      `src/frontend/types/dashboard.ts` still lists platform names in `Source`
+      only as a doc comment now, not a union.
 - [ ] **Decide whether the signed-in dashboard should show source names at all.**
       Showing where a listing came from is normal attribution and users need it to
       apply, but it is a product/legal call. It is behind auth, so it is not
@@ -210,10 +213,53 @@ Onboarding now requires an Apify token alongside at least one AI model key, and
       are rejected with a 400 on current Opus/Sonnet models. The v1 workflow sent
       `temperature: 0.1` to Groq; that value was not carried into the Anthropic
       request in v2. Keep it that way if the request body is ever edited.
+- [ ] **Audit the other typed columns the workflow writes.** Indeed returns
+      `postedAt` as a relative phrase ("8 days ago"), which Postgres rejected
+      with a 22007 on `posted_at_source` — and because the insert is bulk, one
+      bad row failed all eleven. `toTimestamp()` in both normalizers plus
+      `safeTimestamp()` in `Collect For Insert` now guarantee a real timestamp or
+      NULL. The same all-or-nothing exposure applies to `job_type` and
+      `seniority` (both CHECK-constrained) and `tech_stack` (a text[]): any actor
+      field that reaches them unvalidated can fail an entire batch.
 - [ ] **Retire the v1 workflow** once v2 is verified. v1 scrapes Wuzzuf and
       LinkedIn directly, which is the ToS exposure recorded under "Source
       compliance" — moving collection to Apify actors is what reduces it, and
       that only counts once v1 is off.
+
+## Pipeline architecture — collect vs match (added 2026-08-21)
+
+Collection and matching are now separate. `jobs` is a shared pool that scheduled
+collectors fill for everyone; `user_job_matches` is the per-user scored subset
+the dashboard reads. Three workflows in `n8n/`, replacing the single
+`jobak-job-search-v2.json`.
+
+- [ ] **Run the pipeline migration** at the bottom of `supabase/schema.sql`:
+      `pg_trgm`, `jobs.country_code`, the filter indexes, `collection_runs`, the
+      `match_candidate_jobs` function, and sources 6–12.
+- [ ] **Import and schedule the three workflows.** `jobak-collect-free` (4h),
+      `jobak-collect-apify` (12h), `jobak-match-user` (webhook + 03:00 nightly).
+      Each has the same `Set Config` block — six values, edited in three places.
+- [x] **Wire the dashboard.** Done. `getUserJobs()` returns real matches with
+      tech_stack, description and correct source names; refresh triggers the
+      matcher and `router.refresh()` re-reads; bookmarks persist. The dead
+      `useJobs` / `useJobRefresh` / `MOCK_JOBS` were deleted.
+- [ ] **Set `N8N_MATCH_WEBHOOK_URL`** to the `jobak-match` webhook. Without it
+      the refresh button returns 503 and the dashboard shows a clear error, but
+      nothing matches on demand.
+- [ ] **Decide the empty-pool experience.** A brand-new user whose titles are not
+      yet in the pool sees nothing until the next collection run. Either trigger
+      an immediate collect on their terms at onboarding, or say plainly in the UI
+      that first results arrive within a few hours.
+- [ ] **Retire `jobak-job-search-v2.json`** once the three are running. It does
+      collection and matching in one pass per user, which is the thing this
+      architecture replaces.
+- [ ] **Watch `collection_runs`.** `ok = false` rows, or a `found` that drops to
+      zero for a source that used to return, is how a broken adapter surfaces.
+      There is no alerting on it yet.
+- [ ] **Tell users what their Apify token does.** It runs *their own* search
+      terms only, but the listings it collects land in a shared pool other users
+      can match against. That belongs in the privacy policy and probably in the
+      onboarding copy.
 
 ## Legal & compliance
 
@@ -303,13 +349,13 @@ just a page.
 
 ## Functional gaps
 
-- [ ] **Dashboard is running on mock data.** `useJobs`
-      (`src/frontend/hooks/protected/dashboard/use-jobs.ts`) seeds state from
-      `MOCK_JOBS` and never fetches. Bookmarks are local component state and are not
-      persisted to `user_job_matches`.
-- [ ] **Refresh button does nothing.** `useJobRefresh` is a `setTimeout` stub. The real
-      endpoint (`POST /api/v1/jobs/refresh`) exists and triggers the n8n webhook, but
-      nothing calls it.
+- [ ] **Contract type is never collected.** `Job.type` is hardcoded to
+      "full-time" on every card because no source reports it reliably. Either
+      collect it, derive it from the description, or drop the field from the UI —
+      right now it asserts something the posting never said.
+- [ ] **Refresh is rate-limited in memory** (30s per user, per instance), which
+      resets on deploy and does not hold across instances. Same gap as the
+      verify-key throttle — both want the real rate limiting.
 - [ ] **No rate limiting on `/api/v1/jobs/refresh`.** Any authenticated user can trigger
       the n8n workflow as often as they like. The landing page advertises unlimited
       searches, so if that needs to change, the copy in

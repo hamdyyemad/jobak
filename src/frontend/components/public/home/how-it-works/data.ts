@@ -9,7 +9,7 @@ export const steps: Step[] = [
   {
     number: "I",
     title: "Tell us what you want",
-    description: "Complete a 6-step onboarding: pick remote vs on-site, your location, field, skills, job type, and salary range.",
+    description: "Complete a 5-step onboarding: pick remote vs on-site, the countries you'll work in, your field, your skills, and the roles you're targeting.",
     code: `{
   workPreference: "remote",
   field: "Software Engineering",

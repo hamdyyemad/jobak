@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Job, CvInsights } from "@/frontend/types/dashboard";
 import { toggleBookmarkAction } from "@/backend/actions/jobs";
 import { useJobFilters } from "@/frontend/hooks/protected/dashboard/use-job-filters";
-import { SOURCES } from "@/frontend/components/protected/dashboard/data";
 import { Sidebar } from "./sidebar";
 import { GreetingBanner } from "./greeting-banner";
-import { JobFilters } from "./job-filters";
 import { JobList } from "./job-list";
 import { JobDrawer } from "./job-drawer";
 import { EmptyState } from "./empty-state";
@@ -25,8 +24,32 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<"jobs" | "bookmarks">("jobs");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const router = useRouter();
+
+  /*
+   * The server component owns the list and re-reads it on router.refresh().
+   * Adjusting during render rather than in an effect is React's own guidance
+   * for "reset state when a prop changes": an effect would paint the stale list
+   * for a frame first, then cascade a second render to replace it.
+   */
+  const [syncedFrom, setSyncedFrom] = useState(initialJobs);
+  if (syncedFrom !== initialJobs) {
+    setSyncedFrom(initialJobs);
+    setJobs(initialJobs);
+  }
 
   const { search, setSearch, filterSource, setFilterSource, filteredJobs } = useJobFilters(jobs);
+
+  /*
+   * The filter row is built from the jobs on screen rather than a fixed list.
+   * The collectors add sources over time, and a hardcoded row both offered
+   * filters that could never match and hid the ones that could.
+   */
+  const sources = useMemo<(string | "all")[]>(
+    () => ["all", ...Array.from(new Set(jobs.map((j) => j.source))).sort()],
+    [jobs]
+  );
 
   const bookmarkedCount = jobs.filter((j) => j.bookmarked).length;
   const topMatchesCount = jobs.filter((j) => j.score >= 80).length;
@@ -58,11 +81,27 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
     setSelectedJob((prev) => prev?.id === id ? { ...prev, bookmarked: newValue } : prev);
   }
 
+  /*
+   * Asks the matcher to score whatever the collectors have added since last
+   * time. Collection itself runs on its own schedule — this is not a scrape,
+   * so it returns in seconds rather than minutes.
+   */
   async function handleRefresh() {
     setIsRefreshing(true);
+    setRefreshError(null);
     try {
       const res = await fetch("/api/v1/jobs/refresh", { method: "POST" });
-      if (res.ok) window.location.reload();
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setRefreshError(result.error ?? "Couldn't refresh your matches. Try again in a moment.");
+        return;
+      }
+      // Server component owns the job list, so a router refresh re-reads it
+      // without throwing away scroll position the way a reload does.
+      router.refresh();
+    } catch {
+      setRefreshError("Couldn't reach the server. Check your connection.");
     } finally {
       setIsRefreshing(false);
     }
@@ -98,7 +137,7 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
 
           {/* Source filters */}
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
-            {SOURCES.map((source) => (
+            {sources.map((source) => (
               <button
                 key={source}
                 onClick={() => setFilterSource(source)}
@@ -123,8 +162,19 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
             onRefresh={handleRefresh}
           />
 
+          {refreshError && (
+            <p role="alert" className="mb-4 border-l-2 border-(--status-rose) py-2 pl-4 text-sm text-(--status-rose)">
+              {refreshError}
+            </p>
+          )}
+
           {visibleJobs.length === 0 ? (
-            <EmptyState />
+            <EmptyState
+              hasAnyJobs={jobs.length > 0}
+              isBookmarksTab={activeTab === "bookmarks"}
+              isRefreshing={isRefreshing}
+              onRefresh={handleRefresh}
+            />
           ) : (
             <JobList
               jobs={visibleJobs}

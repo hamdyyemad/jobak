@@ -10,8 +10,8 @@ import { Compass, Gauge, KeyRound } from "lucide-react";
 const slides = [
   {
     icon: Compass,
-    title: "Six questions, once",
-    body: "Work preference, location, skills, job type, seniority and salary range. That profile drives every search you run.",
+    title: "Five questions, once",
+    body: "Work preference, location, field, skills and the roles you want. That profile drives every search you run."
   },
   {
     icon: Gauge,

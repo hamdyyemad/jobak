@@ -1,6 +1,6 @@
 import { Bookmark, BookmarkCheck, Wifi } from "lucide-react";
 import { Job } from "@/frontend/types/dashboard";
-import { SOURCE_COLORS } from "./data";
+import { sourceColor } from "./data";
 import { ScoreBadge } from "./score-badge";
 
 interface JobCardProps {
@@ -51,7 +51,7 @@ export function JobCard({ job, index, selected, onSelect, onToggleBookmark }: Jo
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap mt-2">
-            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${SOURCE_COLORS[job.source]}`}>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${sourceColor(job.source)}`}>
               {job.source}
             </span>
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-border-standard text-(--fg-tertiary) capitalize">

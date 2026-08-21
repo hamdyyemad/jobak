@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
-import { decryptApiKey } from "@/backend/lib/crypto/api-key";
 import {
   toUserMessage,
   logServerError,
@@ -9,159 +8,113 @@ import {
   CONNECTION_MESSAGE,
 } from "@/backend/lib/errors";
 
+/**
+ * Asks the matcher to score whatever the collectors have added since last time.
+ *
+ * This used to run the whole pipeline per user — scrape, score, insert — which
+ * meant a refresh took minutes and re-collected listings other users had already
+ * paid to fetch. Collection now runs on its own schedule into a shared pool, so
+ * this only triggers the per-user half: narrow the pool, score what is new,
+ * write the matches. Seconds, not minutes.
+ *
+ * No keys are sent. The matcher pulls the user's provider key and candidates
+ * from `/api/v1/internal/match-candidates`, so a plaintext key never travels
+ * with a request the browser can trigger.
+ */
+
+/** In-memory, per instance — enough to stop a held-down button. */
+const MIN_INTERVAL_MS = 30_000;
+const lastRun = new Map<string, number>();
+
 export async function POST() {
   try {
-    return await handleRefresh();
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const previous = lastRun.get(user.id) ?? 0;
+    const since = Date.now() - previous;
+    if (since < MIN_INTERVAL_MS) {
+      return NextResponse.json(
+        {
+          error: `Just refreshed. Try again in ${Math.ceil((MIN_INTERVAL_MS - since) / 1000)}s.`,
+        },
+        { status: 429 }
+      );
+    }
+
+    // Onboarding has to be complete: without preferences there is nothing to
+    // narrow the pool by, and without a key there is nothing to score with.
+    const service = createServiceClient();
+    const { data: prefs, error } = await service
+      .from("user_preferences")
+      .select("onboarding_completed, ai_keys_encrypted")
+      .eq("user_id", user.id)
+      .single();
+
+    if (isConnectionError(error)) {
+      logServerError("jobs/refresh:preferences", error);
+      return NextResponse.json({ error: CONNECTION_MESSAGE }, { status: 503 });
+    }
+
+    if (error || !prefs?.onboarding_completed) {
+      return NextResponse.json(
+        { error: "Finish onboarding first so we know what to look for." },
+        { status: 404 }
+      );
+    }
+
+    const keys = prefs.ai_keys_encrypted;
+    if (!keys || typeof keys !== "object" || Object.keys(keys).length === 0) {
+      return NextResponse.json(
+        { error: "No AI key on file. Add one to score your matches." },
+        { status: 400 }
+      );
+    }
+
+    const matchUrl = process.env.N8N_MATCH_WEBHOOK_URL;
+    const secret = process.env.N8N_WEBHOOK_SECRET;
+
+    if (!matchUrl) {
+      // A configuration problem — say so in the log, not to the user.
+      logServerError("jobs/refresh", new Error("N8N_MATCH_WEBHOOK_URL is not configured"));
+      return NextResponse.json(
+        { error: "Matching is temporarily unavailable. Please try again later." },
+        { status: 503 }
+      );
+    }
+
+    lastRun.set(user.id, Date.now());
+
+    const response = await fetch(matchUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(secret ? { "X-Webhook-Secret": secret } : {}),
+      },
+      body: JSON.stringify({ userId: user.id }),
+    });
+
+    if (!response.ok) {
+      logServerError("jobs/refresh:n8n", new Error(`matcher responded ${response.status}`));
+      return NextResponse.json(
+        { error: "We couldn't refresh your matches just now. Try again in a moment." },
+        { status: 502 }
+      );
+    }
+
+    const result = await response.json().catch(() => ({}));
+    return NextResponse.json({ success: true, matched: result.matched ?? 0 });
   } catch (error) {
     logServerError("jobs/refresh", error);
     return NextResponse.json(
-      { error: toUserMessage(error, "We couldn't start your job search. Please try again.") },
+      { error: toUserMessage(error, "We couldn't refresh your matches. Please try again.") },
       { status: isConnectionError(error) ? 503 : 500 }
     );
   }
-}
-
-async function handleRefresh() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const service = createServiceClient();
-  const { data: prefs, error } = await service
-    .from("user_preferences")
-    .select("*")
-    .eq("user_id", user.id)
-    .single();
-
-  // A connection failure is not the same as "you haven't onboarded yet"
-  if (isConnectionError(error)) {
-    logServerError("jobs/refresh:preferences", error);
-    return NextResponse.json({ error: CONNECTION_MESSAGE }, { status: 503 });
-  }
-
-  if (error || !prefs) {
-    return NextResponse.json(
-      { error: "No preferences found. Complete onboarding first." },
-      { status: 404 }
-    );
-  }
-
-  /*
-   * Keys live in `ai_keys_encrypted` keyed by provider. Rows written before
-   * multi-provider support only have the single Groq column, so that is read as
-   * a fallback rather than forcing those users back through onboarding.
-   */
-  const stored: Record<string, string> =
-    prefs.ai_keys_encrypted && typeof prefs.ai_keys_encrypted === "object"
-      ? prefs.ai_keys_encrypted
-      : prefs.groq_api_key_encrypted
-        ? { groq: prefs.groq_api_key_encrypted }
-        : {};
-
-  const aiKeys: Record<string, string> = {};
-  try {
-    for (const [provider, encrypted] of Object.entries(stored)) {
-      aiKeys[provider] = await decryptApiKey(encrypted);
-    }
-  } catch (decryptError) {
-    logServerError("jobs/refresh:decrypt", decryptError);
-    return NextResponse.json(
-      { error: "We couldn't read your saved API key. Re-enter it to continue." },
-      { status: 500 }
-    );
-  }
-
-  if (Object.keys(aiKeys).length === 0) {
-    return NextResponse.json(
-      { error: "No AI key on file. Add one to start a search." },
-      { status: 400 }
-    );
-  }
-
-  // The provider the user picked first is the one the workflow should prefer.
-  const preferredProvider: string =
-    (Array.isArray(prefs.ai_providers) && prefs.ai_providers.find((p: string) => aiKeys[p])) ??
-    Object.keys(aiKeys)[0];
-
-  /*
-   * Apify collects the listings, so a refresh without it has nothing to score.
-   * Rows written before Apify became mandatory have no token — those users are
-   * sent back to onboarding rather than silently running an empty search.
-   */
-  let apifyKey = "";
-  if (prefs.apify_key_encrypted) {
-    try {
-      apifyKey = await decryptApiKey(prefs.apify_key_encrypted);
-    } catch (decryptError) {
-      logServerError("jobs/refresh:decrypt-apify", decryptError);
-      return NextResponse.json(
-        { error: "We couldn't read your saved Apify token. Re-enter it to continue." },
-        { status: 500 }
-      );
-    }
-  }
-
-  if (!apifyKey) {
-    return NextResponse.json(
-      { error: "No Apify token on file. Add one to start a search." },
-      { status: 400 }
-    );
-  }
-
-  const n8nUrl = process.env.N8N_WEBHOOK_URL;
-  const n8nSecret = process.env.N8N_WEBHOOK_SECRET;
-
-  if (!n8nUrl) {
-    // Configuration problem — say so in the log, not to the user
-    logServerError("jobs/refresh", new Error("N8N_WEBHOOK_URL is not configured"));
-    return NextResponse.json(
-      { error: "Job search is temporarily unavailable. Please try again later." },
-      { status: 503 }
-    );
-  }
-
-  const payload = {
-    userId: user.id,
-    workPreference: prefs.work_preference,
-    location: prefs.location,
-    field: prefs.field,
-    skills: prefs.skills,
-    experience: prefs.experience,
-    jobType: prefs.job_types,
-    jobTitles: prefs.job_titles ?? [],
-    seniority: prefs.seniority,
-    salary: prefs.salary,
-    aiProvider: preferredProvider,
-    aiKeys,
-    apifyKey,
-    groqApiKey: aiKeys.groq ?? "",
-    timestamp: new Date().toISOString(),
-  };
-
-  const n8nResponse = await fetch(n8nUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(n8nSecret ? { "X-Webhook-Secret": n8nSecret } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!n8nResponse.ok) {
-    logServerError(
-      "jobs/refresh:n8n",
-      new Error(`n8n responded ${n8nResponse.status}`)
-    );
-    return NextResponse.json(
-      { error: "We couldn't start your job search just now. Please try again in a moment." },
-      { status: 502 }
-    );
-  }
-
-  return NextResponse.json({ success: true });
 }

@@ -1,0 +1,440 @@
+{
+  "name": "Jobak — Match user (on demand + nightly)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobak-match",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "on-demand",
+      "name": "On Demand",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        400,
+        120
+      ],
+      "webhookId": "jobak-match"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "nightly-top-up",
+      "name": "Nightly Top-Up",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────\n// EDIT THESE BEFORE ACTIVATING — same values in all three workflows\n// ─────────────────────────────────────────────────────────────\nconst APP_URL        = 'https://YOUR-APP.vercel.app';\nconst WEBHOOK_SECRET = 'CHANGE_ME_same_as_N8N_WEBHOOK_SECRET';\nconst SUPABASE_URL   = 'https://YOUR-PROJECT.supabase.co';\nconst SUPABASE_KEY   = 'YOUR_SERVICE_ROLE_KEY';\nconst SCRAPER_URL    = 'https://YOUR-SCRAPER.vercel.app';\nconst SCRAPER_SECRET = 'CHANGE_ME_same_as_SCRAPER_SECRET';\n\n// Listings pulled per search term, per source.\nconst LIMIT_PER_TERM = 40;\n\n// Company slugs for the ATS sources — first-party listings, free, but you have\n// to name the companies. Grow this list over time.\nconst ATS = { greenhouse: [], ashby: [], workable: [] };\n\n// Jobs sent to the model in one request.\nconst SCORE_BATCH_SIZE = 15;\n\nconst MODELS = {\n  anthropic: 'claude-opus-5',\n  openai:    'gpt-4o-mini',\n  gemini:    'gemini-2.0-flash',\n  groq:      'llama-3.3-70b-versatile'\n};\n\nreturn { json: {\n  appUrl: APP_URL, webhookSecret: WEBHOOK_SECRET,\n  supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY,\n  scraperUrl: SCRAPER_URL, scraperSecret: SCRAPER_SECRET,\n  limitPerTerm: LIMIT_PER_TERM, ats: ATS,\n  scoreBatchSize: SCORE_BATCH_SIZE, models: MODELS\n} };"
+      },
+      "id": "set-config",
+      "name": "Set Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Both entry points converge here. A webhook run carries one userId; the\n// nightly run carries none, and the app answers with the batch due a pass.\nconst config = $('Set Config').first().json;\nlet userId = null;\ntry { userId = $('On Demand').first().json.body?.userId || null; } catch (e) { /* scheduled run */ }\n\nreturn [{ json: { ...config, userId, onDemand: Boolean(userId) } }];"
+      },
+      "id": "resolve-users",
+      "name": "Resolve Users",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.appUrl }}/api/v1/internal/match-candidates",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'x-webhook-secret': $json.webhookSecret, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.userId ? { userId: $json.userId } : {}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "get-user-list",
+      "name": "Get User List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json;\nconst body = payload.body || payload;\n\n// On-demand: the app already returned this user's candidates in full.\nif (body.userId) return [{ json: { userId: body.userId, preloaded: body } }];\n\nconst users = body.users || [];\nconsole.log('Nightly top-up for ' + users.length + ' user(s)');\nreturn users.map(u => ({ json: { userId: u.userId, preloaded: null } }));"
+      },
+      "id": "split-users",
+      "name": "Split Users",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "user-loop",
+      "name": "User Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.appUrl }}/api/v1/internal/match-candidates",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'x-webhook-secret': $('Set Config').first().json.webhookSecret, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ userId: $json.userId }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "get-candidates",
+      "name": "Get Candidates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The SQL pre-filter has already dropped everything irrelevant and everything\n// this user has seen, so what arrives here is exactly what is worth paying a\n// model to read.\nconst payload = $input.first().json;\nconst data = payload.body || payload;\nconst size = $('Set Config').first().json.scoreBatchSize || 15;\n\nif (!data.jobs || data.jobs.length === 0) {\n  console.log('No new candidates for ' + (data.userId || '?'));\n  return [];\n}\nconsole.log('Scoring ' + data.jobs.length + ' candidate(s) for ' + data.userId);\n\nconst batches = [];\nfor (let i = 0; i < data.jobs.length; i += size) {\n  batches.push({ json: {\n    userId: data.userId, aiProvider: data.aiProvider, aiApiKey: data.aiApiKey,\n    aiModel: $('Set Config').first().json.models[data.aiProvider],\n    profile: data.profile, jobs: data.jobs.slice(i, i + size)\n  } });\n}\nreturn batches;"
+      },
+      "id": "batch-candidates",
+      "name": "Batch Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// One node builds the request for whichever provider the user connected, so a\n// single HTTP node serves all four.\nconst b = $input.item.json;\nconst p = b.profile || {};\n\nconst profile = [\n  'Field: ' + (p.field || 'n/a'),\n  'Target titles: ' + ((p.jobTitles || []).join(', ') || '(any)'),\n  'Skills: ' + ((p.skills || []).join(', ') || '(not given)'),\n  'Experience: ' + (p.experience || 0) + ' years (' + (p.seniority || 'mid') + ')',\n  'Work preference: ' + ((p.workPreference || []).join(', ') || 'any'),\n  'Location: ' + (p.location?.worldwide ? 'Worldwide' : (p.location?.countries || []).join(', ') || 'Worldwide')\n].join('\\n');\n\nconst listing = b.jobs.map((j, i) => ({\n  i, title: String(j.title || '').substring(0, 200),\n  company: String(j.company || '').substring(0, 120),\n  location: String(j.location || '').substring(0, 120),\n  type: j.job_type,\n  description: String(j.description || '').substring(0, 900)\n}));\n\nconst instruction = 'Score each job against the candidate profile.\\n\\n'\n  + 'CANDIDATE PROFILE:\\n' + profile + '\\n\\n'\n  + 'JOBS (JSON):\\n' + JSON.stringify(listing) + '\\n\\n'\n  + 'Return ONLY {\"results\":[...]} with one entry per job:\\n'\n  + '{\"i\": <index>, \"score\": <0-100>, \"tech_stack\": [\"lowercase\"], '\n  + '\"seniority\": \"junior\"|\"mid\"|\"senior\"|\"lead\"|null, \"is_relevant\": <bool>, '\n  + '\"match_reason\": \"<max 20 words>\"}\\n\\n'\n  + 'Scoring: 90-100 near-perfect; 70-89 good; 50-69 partial; 30-49 weak; 0-29 poor.\\n'\n  + 'Set is_relevant false only for a completely unrelated field or recruiter spam.\\n'\n  + 'Return an entry for every job, in order.';\n\nconst system = 'You are a job matching engine. Return only strict JSON. No markdown, no preamble.';\nlet aiUrl, aiHeaders, aiBody;\n\nswitch (b.aiProvider) {\n  case 'anthropic':\n    aiUrl = 'https://api.anthropic.com/v1/messages';\n    aiHeaders = { 'x-api-key': b.aiApiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };\n    // No `temperature`: sampling parameters are rejected with a 400 on current\n    // Opus/Sonnet models. `effort: low` keeps a classification task cheap.\n    aiBody = { model: b.aiModel, max_tokens: 4000, system,\n               output_config: { effort: 'low' },\n               messages: [{ role: 'user', content: instruction }] };\n    break;\n  case 'gemini':\n    aiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + b.aiModel + ':generateContent';\n    aiHeaders = { 'x-goog-api-key': b.aiApiKey, 'Content-Type': 'application/json' };\n    aiBody = { systemInstruction: { parts: [{ text: system }] },\n               contents: [{ role: 'user', parts: [{ text: instruction }] }],\n               generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 4000 } };\n    break;\n  case 'openai':\n  case 'groq':\n  default:\n    aiUrl = b.aiProvider === 'openai'\n      ? 'https://api.openai.com/v1/chat/completions'\n      : 'https://api.groq.com/openai/v1/chat/completions';\n    aiHeaders = { 'Authorization': 'Bearer ' + b.aiApiKey, 'Content-Type': 'application/json' };\n    aiBody = { model: b.aiModel, temperature: 0, max_tokens: 4000,\n               response_format: { type: 'json_object' },\n               messages: [{ role: 'system', content: system }, { role: 'user', content: instruction }] };\n    break;\n}\n\nreturn { json: { userId: b.userId, jobs: b.jobs, aiUrl, aiHeaders, aiBody } };"
+      },
+      "id": "build-scoring-request",
+      "name": "Build Scoring Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.aiUrl }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($json.aiHeaders) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.aiBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          }
+        }
+      },
+      "id": "score-batch-ai",
+      "name": "Score Batch (AI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2560,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One parser for all four providers: pull the text out of whichever envelope\n// came back, then read the same JSON contract from it.\nconst response = $input.item.json;\nconst request = $('Build Scoring Request').item.json;\nconst jobs = request.jobs || [];\n\nfunction extractText(r) {\n  if (Array.isArray(r.content)) return r.content.filter(b => b && b.type === 'text').map(b => b.text).join('');\n  if (r.choices && r.choices[0]) return r.choices[0].message ? r.choices[0].message.content : r.choices[0].text;\n  if (Array.isArray(r.candidates) && r.candidates[0]) {\n    const parts = r.candidates[0].content && r.candidates[0].content.parts;\n    if (Array.isArray(parts)) return parts.map(p => p.text || '').join('');\n  }\n  return '';\n}\n\nlet results = [];\nconst text = extractText(response) || '';\nif (!text) {\n  console.log('Scoring failed: ' + JSON.stringify(response).substring(0, 300));\n} else {\n  try {\n    let parsed;\n    try { parsed = JSON.parse(text); }\n    catch (e) { const m = text.match(/\\{[\\s\\S]*\\}/); if (m) parsed = JSON.parse(m[0]); }\n    if (parsed) results = parsed.results || (Array.isArray(parsed) ? parsed : []);\n  } catch (e) { console.log('Parse error: ' + e.message); }\n}\n\nconst byIndex = new Map();\nfor (const r of results) if (r && typeof r.i === 'number') byIndex.set(r.i, r);\n\n// Irrelevant jobs are still recorded, at their real score. Writing the row is\n// what stops this user being charged to score the same job again tomorrow.\nconst matches = jobs.map((job, i) => {\n  const r = byIndex.get(i) || {};\n  const scored = byIndex.has(i);\n  return {\n    user_id: request.userId,\n    job_id: job.id,\n    score: typeof r.score === 'number' ? Math.min(100, Math.max(0, Math.round(r.score))) : (scored ? 50 : 40)\n  };\n});\n\nconsole.log('Built ' + matches.length + ' match row(s), ' + byIndex.size + ' scored by the model');\nreturn [{ json: { matches, count: matches.length } }];"
+      },
+      "id": "build-matches",
+      "name": "Build Matches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.supabaseUrl }}/rest/v1/user_job_matches?on_conflict=user_id,job_id",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $('Set Config').first().json.supabaseKey, 'Authorization': 'Bearer ' + $('Set Config').first().json.supabaseKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal,resolution=merge-duplicates' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.matches) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "upsert-matches",
+      "name": "Upsert Matches",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3040,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, matched: $('Build Matches').first().json.count || 0 }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        3280,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "On Demand": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nightly Top-Up": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Config": {
+      "main": [
+        [
+          {
+            "node": "Resolve Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Users": {
+      "main": [
+        [
+          {
+            "node": "Get User List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User List": {
+      "main": [
+        [
+          {
+            "node": "Split Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Users": {
+      "main": [
+        [
+          {
+            "node": "User Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Loop": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Candidates": {
+      "main": [
+        [
+          {
+            "node": "Batch Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Candidates": {
+      "main": [
+        [
+          {
+            "node": "Build Scoring Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Scoring Request": {
+      "main": [
+        [
+          {
+            "node": "Score Batch (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Batch (AI)": {
+      "main": [
+        [
+          {
+            "node": "Build Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Matches": {
+      "main": [
+        [
+          {
+            "node": "Upsert Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Matches": {
+      "main": [
+        [
+          {
+            "node": "User Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Jobak"
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
+import { X } from "lucide-react";
 import { OnboardingData } from "@/frontend/types/on-boarding";
 import { Select } from "@/frontend/components/shared/select";
 import { Flag } from "@/frontend/components/shared/flag";
-import { countries } from "@/frontend/lib/configs/countries";
+import { countries, countryName } from "@/frontend/lib/configs/countries";
 import { OptionRow } from "./option-row";
 import { labelClass } from "./styles";
 
@@ -29,8 +31,23 @@ interface StepLocationProps {
 }
 
 export function StepLocation({ location, onUpdate }: StepLocationProps) {
+  /** Already-picked countries drop out of the list — choosing one twice is a no-op. */
+  const available = useMemo(
+    () => countryOptions.filter((o) => !location.countries.includes(o.value)),
+    [location.countries]
+  );
+
   const setWorldwide = (worldwide: boolean) => {
     onUpdate({ location: { ...location, worldwide } });
+  };
+
+  const addCountry = (code: string) => {
+    if (!code || location.countries.includes(code)) return;
+    onUpdate({ location: { countries: [...location.countries, code], worldwide: false } });
+  };
+
+  const removeCountry = (code: string) => {
+    onUpdate({ location: { ...location, countries: location.countries.filter((c) => c !== code) } });
   };
 
   return (
@@ -45,31 +62,63 @@ export function StepLocation({ location, onUpdate }: StepLocationProps) {
         />
         <OptionRow
           index={2}
-          label="Specific country"
-          hint="Narrow to one market"
+          label="Specific countries"
+          hint="Search one market or several"
           selected={!location.worldwide}
           onClick={() => setWorldwide(false)}
         />
       </div>
 
       {/*
-        The country picker fades back rather than disappearing when the search is
+        The picker fades back rather than disappearing when the search is
         worldwide — the scene beside it is already carrying the answer, and a
         control that vanishes makes the layout jump on every toggle.
       */}
       <div
         className={`transition-opacity duration-500 ${location.worldwide ? "opacity-35" : "opacity-100"}`}
       >
-        <label className={labelClass}>Country</label>
+        <label className={labelClass}>
+          Countries{" "}
+          {!location.worldwide && location.countries.length > 0 && (
+            <span className="text-(--sc-a)">· {location.countries.length} selected</span>
+          )}
+        </label>
+
         <Select
-          value={location.country}
-          onChange={(country) => onUpdate({ location: { country, worldwide: false } })}
-          options={countryOptions}
-          disabled={location.worldwide}
-          placeholder={`Search ${countries.length} countries…`}
+          value=""
+          onChange={addCountry}
+          options={available}
+          disabled={location.worldwide || available.length === 0}
+          placeholder={
+            available.length === 0
+              ? "All countries added"
+              : `Add a country · ${available.length} available`
+          }
           searchPlaceholder="Type a country name…"
-          ariaLabel="Country"
+          ariaLabel="Add a country"
         />
+
+        {location.countries.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {location.countries.map((code) => (
+              <span
+                key={code}
+                className="chip-in flex items-center gap-2 border border-border-standard px-3 py-1.5 text-[13px] text-fg-secondary"
+              >
+                <Flag code={code} />
+                {countryName(code)}
+                <button
+                  type="button"
+                  aria-label={`Remove ${countryName(code)}`}
+                  onClick={() => removeCountry(code)}
+                  className="leading-none text-fg-quaternary transition-colors hover:text-(--fg-primary)"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

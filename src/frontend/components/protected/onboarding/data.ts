@@ -38,7 +38,6 @@ export const stepKickers = [
     "Location",
     "Discipline",
     "Target role",
-    "Compensation",
     "Intelligence",
 ];
 
@@ -47,37 +46,17 @@ export const stepTitles = [
     "Where are you looking?",
     "What's your field?",
     "What are you looking for?",
-    "Salary expectations",
     "Connect your AI",
 ];
 
 export const stepDescriptions = [
     "Pick every arrangement you'd accept — you can choose more than one.",
-    "We'll use this to surface the most relevant opportunities.",
+    "Search one market, several, or everywhere.",
     "Tell us your profession and the skills you bring.",
     "Define your ideal job type and the roles you're after.",
-    "Help us filter opportunities within your range.",
     "Choose a provider and add its key — we'll verify it before you continue.",
 ];
 
-export const currencyOptions = [
-    { value: "USD", label: "USD", hint: "US Dollar ($)", keywords: "dollar united states" },
-    { value: "EUR", label: "EUR", hint: "Euro (€)", keywords: "euro europe" },
-    { value: "GBP", label: "GBP", hint: "British Pound (£)", keywords: "pound sterling uk" },
-    { value: "EGP", label: "EGP", hint: "Egyptian Pound (E£)", keywords: "egypt" },
-    { value: "AED", label: "AED", hint: "UAE Dirham (د.إ)", keywords: "emirates dubai" },
-    { value: "SAR", label: "SAR", hint: "Saudi Riyal (﷼)", keywords: "saudi arabia" },
-    { value: "CAD", label: "CAD", hint: "Canadian Dollar (C$)", keywords: "canada" },
-    { value: "AUD", label: "AUD", hint: "Australian Dollar (A$)", keywords: "australia" },
-    { value: "CHF", label: "CHF", hint: "Swiss Franc", keywords: "switzerland" },
-    { value: "SEK", label: "SEK", hint: "Swedish Krona", keywords: "sweden" },
-    { value: "INR", label: "INR", hint: "Indian Rupee (₹)", keywords: "india" },
-    { value: "JPY", label: "JPY", hint: "Japanese Yen (¥)", keywords: "japan" },
-    { value: "SGD", label: "SGD", hint: "Singapore Dollar (S$)", keywords: "singapore" },
-    { value: "ZAR", label: "ZAR", hint: "South African Rand", keywords: "south africa" },
-    { value: "NGN", label: "NGN", hint: "Nigerian Naira (₦)", keywords: "nigeria" },
-    { value: "BRL", label: "BRL", hint: "Brazilian Real (R$)", keywords: "brazil" },
-];
 
 export const aiProviderOptions: {
     value: AiProvider;

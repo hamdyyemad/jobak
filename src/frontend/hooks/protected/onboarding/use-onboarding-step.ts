@@ -1,6 +1,11 @@
 import { useState, useMemo } from "react";
 
-const TOTAL_STEPS = 6;
+/*
+ * Five, since salary expectations were dropped: the range was self-reported,
+ * rarely matched what a posting actually advertised, and the model scored better
+ * without it than with a number it had to second-guess.
+ */
+const TOTAL_STEPS = 5;
 
 export type StepDirection = "forward" | "back";
 

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { X, ArrowUpRight, Bookmark, BookmarkCheck, MapPin, Clock, Banknote, Wifi, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Job } from "@/frontend/types/dashboard";
-import { SOURCE_COLORS } from "./data";
+import { sourceColor } from "./data";
 import { ScoreBadge } from "./score-badge";
 
 interface JobDrawerProps {
@@ -99,7 +99,7 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
           <MetaPill icon={Clock} label={job.type} capitalize />
           {job.salary && <MetaPill icon={Banknote} label={job.salary} />}
           {job.remote && <MetaPill icon={Wifi} label="Remote" accent />}
-          <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs ${SOURCE_COLORS[job.source]}`}>
+          <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs ${sourceColor(job.source)}`}>
             {job.source}
           </span>
           <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border-standard text-(--fg-quaternary) text-xs">

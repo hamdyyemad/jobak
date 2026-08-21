@@ -13,7 +13,7 @@ export interface ReadoutRow {
 export interface SceneState {
     /** ISO country code to sample the tint from, or null for no flag. */
     countryCode: string | null;
-    /** Brand hex that overrides the flag tint — step 6 only. */
+    /** Brand hex that overrides the flag tint — the credentials step only. */
     tintOverride: string | null;
     /** Orbits drawn around the object: one per question answered. */
     rings: number;
@@ -35,8 +35,12 @@ function workLabel(data: OnboardingData): string {
 
 function whereLabel(data: OnboardingData): string {
     if (data.location.worldwide) return "Worldwide";
-    if (data.location.country) return countryName(data.location.country);
-    return EMPTY;
+    const { countries } = data.location;
+    if (countries.length === 0) return EMPTY;
+    if (countries.length === 1) return countryName(countries[0]);
+    // Naming every country overflows the readout column; the first plus a count
+    // stays legible and still says how wide the search is.
+    return `${countryName(countries[0])} +${countries.length - 1}`;
 }
 
 function fieldValue(data: OnboardingData): string {
@@ -52,14 +56,6 @@ function roleValue(data: OnboardingData): string {
     if (data.jobTitles.length === 0) return `${data.jobType.length} type(s)`;
     if (data.jobTitles.length === 1) return data.jobTitles[0];
     return `${data.jobTitles[0]} +${data.jobTitles.length - 1}`;
-}
-
-function rangeValue(data: OnboardingData): string {
-    const { min, max, currency } = data.salary;
-    if (!min && !max) return EMPTY;
-    const fmt = (n: number) => n.toLocaleString("en-US");
-    if (min && max) return `${fmt(min)}–${fmt(max)} ${currency}`;
-    return `${min ? `${fmt(min)}+` : `up to ${fmt(max)}`} ${currency}`;
 }
 
 function aiValue(data: OnboardingData): string {
@@ -82,16 +78,15 @@ export function sceneState(data: OnboardingData, step: number): SceneState {
         { step: 2, label: "Where", value: whereLabel(data) },
         { step: 3, label: "Field", value: fieldValue(data) },
         { step: 4, label: "Role", value: roleValue(data) },
-        { step: 5, label: "Range", value: rangeValue(data) },
-        { step: 6, label: "AI", value: aiValue(data) },
+        { step: 5, label: "AI", value: aiValue(data) },
     ];
 
     const rings = readout.filter((row) => row.value !== EMPTY).length;
 
-    // Step 6 hands the scene over to the provider's own colour; step 2 to the
+    // Step 5 hands the scene over to the provider's own colour; step 2 to the
     // flag. Everywhere else the scene keeps the product's accent.
     const tintOverride =
-        step === 6 && data.aiProviders.length > 0
+        step === 5 && data.aiProviders.length > 0
             ? aiProviderOptions.find((o) => o.value === data.aiProviders[data.aiProviders.length - 1])?.tint ?? null
             : null;
 
@@ -100,12 +95,13 @@ export function sceneState(data: OnboardingData, step: number): SceneState {
         2: whereLabel(data) === EMPTY ? "Anywhere yet" : whereLabel(data),
         3: data.field ? fieldValue(data) : "Choose a field",
         4: roleValue(data) === EMPTY ? "Pick your roles" : roleValue(data),
-        5: rangeValue(data) === EMPTY ? "Set a range" : rangeValue(data),
-        6: aiValue(data) === EMPTY ? "Connect a provider" : aiValue(data),
+        5: aiValue(data) === EMPTY ? "Connect a provider" : aiValue(data),
     };
 
     return {
-        countryCode: data.location.worldwide ? null : data.location.country || null,
+        // The first pick drives the tint: a scene cannot be several flags at
+        // once, and the first one chosen is the one the user thought of first.
+        countryCode: data.location.worldwide ? null : data.location.countries[0] || null,
         tintOverride,
         rings,
         wireframe: data.location.worldwide,

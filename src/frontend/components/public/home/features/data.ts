@@ -21,7 +21,7 @@ export const features: Feature[] = [
     {
         number: "03",
         title: "Smart Filters",
-        description: "Remote, hybrid, or on-site. Full-time, freelance, or contract. Filter by location, salary range, seniority level, and job type in one place.",
+        description: "Remote, hybrid, or on-site. Full-time, freelance, or contract. Filter by country, seniority level, and job type in one place.",
         visual: "filter",
     },
     {

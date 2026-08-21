@@ -18,7 +18,7 @@ interface OnboardingNavigationProps {
  * The bottom rail.
  *
  * Progress reads as a row of ticks rather than a hairline bar — a discrete count
- * suits a six-step flow better than a continuous fill, and it gives the frame the
+ * suits a five-step flow better than a continuous fill, and it gives the frame the
  * instrument-panel quality both reference sites get from their pinned micro-type.
  */
 export function OnboardingNavigation({

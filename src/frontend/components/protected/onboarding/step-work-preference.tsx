@@ -31,7 +31,7 @@ export function StepWorkPreference({
     onUpdate({
       workPreference: next,
       location: remoteOnly
-        ? { country: "", worldwide: true }
+        ? { countries: [], worldwide: true }
         : { ...location, worldwide: false },
     });
   };

@@ -134,22 +134,22 @@ export function StepApiKey({
 
   return (
     <div className="space-y-10">
-      {/* ── Required: the service that collects the listings ───── */}
+      {/* ── Optional: extra coverage on top of the free sources ── */}
       <section className="space-y-4">
         <div className="flex items-baseline gap-3">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.24em] text-fg-tertiary">
             Job collection
           </h2>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-(--sc-a)">
-            Required
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-quaternary">
+            Optional
           </span>
         </div>
 
         {/*
           A tile in the same language as the model grid, so Apify reads as a
-          connected service rather than a stray text field. It is not a button:
-          there is nothing to toggle when the service is mandatory, so the tint
-          is always on and the tile carries the explanation instead.
+          connected service rather than a stray text field. Not a button: there
+          is nothing to toggle — leaving the key blank is how you decline it —
+          so the tint stays on and the tile carries the explanation instead.
         */}
         <div
           className="relative flex items-center gap-4 px-4 py-4"
@@ -167,8 +167,8 @@ export function StepApiKey({
               {apifyOption.label}
             </span>
             <span className="mt-1 block text-[11px] leading-relaxed text-fg-quaternary">
-              Runs the actors that gather job listings on your behalf. Without it there is nothing
-              for the models to score.
+              Adds LinkedIn and Indeed, which need residential IPs we don&apos;t have. Everything
+              else is collected for free without it.
             </span>
           </span>
 
