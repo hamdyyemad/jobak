@@ -733,6 +733,74 @@ body {
   cursor: not-allowed;
 }
 
+
+/* ── Number field ──────────────────────────────────────────── */
+/*
+ * The native spinner is browser-painted and unthemeable — it shows up as a light
+ * grey control on the dark canvas. Suppressed here; NumberField draws its own.
+ */
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.num-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.15rem;
+  background: transparent;
+  border: 0;
+  color: var(--fg-primary);
+  font-size: 1.0625rem;
+}
+
+.num-input::placeholder {
+  color: var(--fg-quaternary);
+}
+
+.num-input:focus {
+  outline: none;
+}
+
+/* The rule lives on the row, so it spans the input and the stepper together. */
+.num-field {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-bottom: 1px solid var(--border-standard);
+  transition: border-color 300ms ease;
+}
+
+.num-field:focus-within {
+  border-bottom-color: var(--sc-a);
+}
+
+.num-step {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-bottom: 0.3rem;
+  border: 1px solid var(--border-standard);
+  color: var(--fg-tertiary);
+  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+}
+
+.num-step:hover:not(:disabled) {
+  border-color: var(--sc-a);
+  color: var(--fg-primary);
+  background: color-mix(in srgb, var(--sc-a) 12%, transparent);
+}
+
+.num-step:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
 /* ── Dropdown popover ──────────────────────────────────────── */
 .select-pop {
   transform-origin: top center;
@@ -807,4 +875,5 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
 

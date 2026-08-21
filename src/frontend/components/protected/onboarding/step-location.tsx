@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { OnboardingData } from "@/frontend/types/on-boarding";
 import { Select } from "@/frontend/components/shared/select";
 import { Flag } from "@/frontend/components/shared/flag";
@@ -8,27 +7,28 @@ import { countries } from "@/frontend/lib/configs/countries";
 import { OptionRow } from "./option-row";
 import { labelClass } from "./styles";
 
+/*
+ * Module scope, not useMemo: the list is derived from a static import and never
+ * changes, so it is built once per page load. A useMemo here was rebuilding all
+ * 246 descriptors every time the step remounted — and the step is keyed on the
+ * step number, so it remounts on every move back to step 2.
+ *
+ * Only the rows the dropdown actually mounts pay for their <Flag>; Select
+ * windows the list, and the flags themselves load lazily on top of that.
+ */
+const countryOptions = countries.map((country) => ({
+  value: country.code,
+  label: country.name,
+  keywords: country.code,
+  icon: <Flag code={country.code} />,
+}));
+
 interface StepLocationProps {
   location: OnboardingData["location"];
   onUpdate: (updates: Partial<OnboardingData>) => void;
 }
 
 export function StepLocation({ location, onUpdate }: StepLocationProps) {
-  /*
-   * 246 rows, each with an <img>. Built once rather than per render, and the
-   * flags themselves are lazy — only the ones scrolled into the open list load.
-   */
-  const options = useMemo(
-    () =>
-      countries.map((country) => ({
-        value: country.code,
-        label: country.name,
-        keywords: country.code,
-        icon: <Flag code={country.code} />,
-      })),
-    []
-  );
-
   const setWorldwide = (worldwide: boolean) => {
     onUpdate({ location: { ...location, worldwide } });
   };
@@ -64,7 +64,7 @@ export function StepLocation({ location, onUpdate }: StepLocationProps) {
         <Select
           value={location.country}
           onChange={(country) => onUpdate({ location: { country, worldwide: false } })}
-          options={options}
+          options={countryOptions}
           disabled={location.worldwide}
           placeholder={`Search ${countries.length} countries…`}
           searchPlaceholder="Type a country name…"

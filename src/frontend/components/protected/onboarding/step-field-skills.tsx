@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useSkillsManager } from "@/frontend/hooks/protected/onboarding";
 import { OnboardingData } from "@/frontend/types/on-boarding";
 import { Select } from "@/frontend/components/shared/select";
+import { NumberField } from "@/frontend/components/shared/number-field";
 import { jobFields } from "@/frontend/lib/configs/job-titles";
 import { seniorityFromExperience, seniorityOptions } from "./data";
 import { inputClass, labelClass } from "./styles";
@@ -110,15 +111,14 @@ export function StepFieldSkills({
         <label htmlFor="experience-input" className={labelClass}>
           Years of experience
         </label>
-        <input
+        <NumberField
           id="experience-input"
-          type="number"
-          value={experience || ""}
-          onChange={(e) => onUpdate({ experience: parseInt(e.target.value) || 0 })}
+          value={experience}
+          onChange={(years) => onUpdate({ experience: years })}
           placeholder="3"
-          min="0"
-          max="60"
-          className={inputClass}
+          min={0}
+          max={60}
+          ariaLabel="years of experience"
         />
         {/*
           The only place experience is asked. Step 4 used to ask again as a

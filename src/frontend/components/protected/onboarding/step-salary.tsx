@@ -3,7 +3,8 @@
 import { currencyOptions } from "./data";
 import { OnboardingData } from "@/frontend/types/on-boarding";
 import { Select } from "@/frontend/components/shared/select";
-import { inputClass, labelClass } from "./styles";
+import { NumberField } from "@/frontend/components/shared/number-field";
+import { labelClass } from "./styles";
 
 interface StepSalaryProps {
   salary: { min: number; max: number; currency: string };
@@ -20,14 +21,15 @@ export function StepSalary({ salary, onUpdate }: StepSalaryProps) {
           <label htmlFor="salary-min" className={labelClass}>
             Minimum
           </label>
-          <input
+          <NumberField
             id="salary-min"
-            type="number"
-            value={salary.min || ""}
-            onChange={(e) => onUpdate({ salary: { ...salary, min: parseInt(e.target.value) || 0 } })}
+            value={salary.min}
+            onChange={(min) => onUpdate({ salary: { ...salary, min } })}
             placeholder="50,000"
-            min="0"
-            className={`${inputClass} font-mono text-[19px]`}
+            min={0}
+            step={1000}
+            ariaLabel="minimum salary"
+            className="font-mono text-[19px]"
           />
         </div>
 
@@ -39,14 +41,15 @@ export function StepSalary({ salary, onUpdate }: StepSalaryProps) {
           <label htmlFor="salary-max" className={labelClass}>
             Maximum
           </label>
-          <input
+          <NumberField
             id="salary-max"
-            type="number"
-            value={salary.max || ""}
-            onChange={(e) => onUpdate({ salary: { ...salary, max: parseInt(e.target.value) || 0 } })}
+            value={salary.max}
+            onChange={(max) => onUpdate({ salary: { ...salary, max } })}
             placeholder="100,000"
-            min="0"
-            className={`${inputClass} font-mono text-[19px]`}
+            min={0}
+            step={1000}
+            ariaLabel="maximum salary"
+            className="font-mono text-[19px]"
           />
         </div>
       </div>

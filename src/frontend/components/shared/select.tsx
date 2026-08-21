@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+    useCallback,
+    useDeferredValue,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 
 export interface SelectOption {
@@ -32,12 +41,23 @@ interface SelectProps {
 const POPOVER_HEIGHT = 300;
 
 /**
+ * Rows mounted per batch. Around 30 comfortably overfills the 16rem list, so the
+ * user never sees the end of the batch before the next one is requested.
+ */
+const WINDOW_STEP = 30;
+
+/**
  * A styled listbox.
  *
  * A native <select> was used here first: its popup is drawn by the OS, so it
  * ignored every token in the design system and rendered as a white sheet on the
  * dark canvas. Nothing about that popup can be styled, so the list is drawn in
  * the document instead — which also buys us search, hints and icons.
+ *
+ * Long lists are windowed. The country picker has 246 options, each with a flag,
+ * and mounting all of them cost ~900ms of render and layout on every open — a
+ * visible stall on a control that should feel instant. Only the first batch
+ * mounts; the rest arrive as the user scrolls.
  */
 export function Select({
     value,
@@ -55,55 +75,122 @@ export function Select({
     const [active, setActive] = useState(0);
     const [dropUp, setDropUp] = useState(false);
 
+    /*
+     * How many rows are mounted, and which query that count belongs to. Pairing
+     * them lets the count reset itself when the query changes, derived during
+     * render — no effect writing state back after a paint.
+     */
+    const [window_, setWindow] = useState({ query: "", size: WINDOW_STEP });
+
     const rootRef = useRef<HTMLDivElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
+    const sentinelRef = useRef<HTMLLIElement>(null);
+    /** Whether the active row was last moved by the keyboard, not the pointer. */
+    const keyboardNav = useRef(false);
     const listId = useId();
 
     const withSearch = searchable ?? options.length > 8;
     const selected = options.find((o) => o.value === value);
 
-    const filtered = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        if (!q) return options;
-        return options.filter(
-            (o) =>
-                o.label.toLowerCase().includes(q) ||
-                o.value.toLowerCase().includes(q) ||
-                o.keywords?.toLowerCase().includes(q)
-        );
-    }, [options, query]);
-
-    // Open on the current value so the list starts where the user left it.
-    useEffect(() => {
-        if (!open) return;
-        setQuery("");
-        const index = options.findIndex((o) => o.value === value);
-        setActive(index >= 0 ? index : 0);
-        if (withSearch) searchRef.current?.focus();
-    }, [open, options, value, withSearch]);
+    // Typing stays responsive while the (larger) filtered list renders behind it.
+    const deferredQuery = useDeferredValue(query);
 
     /*
-     * Open upward when there is no room below. The country picker sits low on
-     * its step, so opening it downward ran most of the list off the bottom of
-     * the viewport. Measured on open rather than on a resize listener — the list
-     * closes on any outside interaction anyway.
+     * One lowercased haystack per option, built once. The previous version called
+     * toLowerCase() on three fields of all 246 options on every keystroke.
+     */
+    const haystacks = useMemo(
+        () =>
+            options.map((o) =>
+                `${o.label} ${o.value} ${o.keywords ?? ""}`.toLowerCase()
+            ),
+        [options]
+    );
+
+    const filtered = useMemo(() => {
+        const q = deferredQuery.trim().toLowerCase();
+        if (!q) return options;
+        return options.filter((_, i) => haystacks[i].includes(q));
+    }, [options, haystacks, deferredQuery]);
+
+    // Reset the window whenever the query moves on, without an effect.
+    const batch = window_.query === deferredQuery ? window_.size : WINDOW_STEP;
+    // Keyboard navigation can walk past the mounted batch; keep it just ahead.
+    const mounted = Math.min(filtered.length, Math.max(batch, active + 5));
+    const visible = mounted >= filtered.length ? filtered : filtered.slice(0, mounted);
+    const hasMore = mounted < filtered.length;
+
+    const growWindow = useCallback(() => {
+        setWindow({ query: deferredQuery, size: batch + WINDOW_STEP });
+    }, [deferredQuery, batch]);
+
+    const openList = useCallback(() => {
+        /*
+         * Direction is measured here, before the popover exists, not in an effect
+         * afterwards. Measuring after mount meant the list painted downward for a
+         * frame and then jumped up — the flip was visible every time.
+         */
+        const rect = rootRef.current?.getBoundingClientRect();
+        if (rect) {
+            const below = window.innerHeight - rect.bottom;
+            setDropUp(below < POPOVER_HEIGHT && rect.top > below);
+        }
+
+        setQuery("");
+        setWindow({ query: "", size: WINDOW_STEP });
+        keyboardNav.current = false;
+
+        /*
+         * Start on the current value only when it is already in the first batch.
+         * Seeding `active` with, say, Zimbabwe's index would force 240 rows to
+         * mount and undo the windowing — the search box is the way to reach a
+         * selection that far down.
+         */
+        const index = options.findIndex((o) => o.value === value);
+        setActive(index >= 0 && index < WINDOW_STEP ? index : 0);
+
+        setOpen(true);
+    }, [options, value]);
+
+    // Focus has to wait for the input to exist, so this one stays an effect.
+    useEffect(() => {
+        if (open && withSearch) searchRef.current?.focus();
+    }, [open, withSearch]);
+
+    // Mount the next batch as the end of the list comes into view.
+    useEffect(() => {
+        if (!open || !hasMore) return;
+        const sentinel = sentinelRef.current;
+        const root = listRef.current;
+        if (!sentinel || !root) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) growWindow();
+            },
+            { root, rootMargin: "160px" }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [open, hasMore, growWindow]);
+
+    /*
+     * Keep the active row in view — but only when the keyboard moved it.
+     *
+     * This effect used to list `visible` as a dependency, which is a fresh slice
+     * on every render, so it ran a scrollIntoView on every render: 845ms of
+     * forced reflow per open in a trace, because reading layout on this page
+     * means recomputing the full-viewport blurred wash and every color-mix()
+     * derived from the scene tint. Scrolling on hover was wrong anyway — it
+     * fought the user's own scrolling.
      */
     useEffect(() => {
-        if (!open) return;
-        const rect = rootRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        const below = window.innerHeight - rect.bottom;
-        setDropUp(below < POPOVER_HEIGHT && rect.top > below);
-    }, [open]);
-
-    // Keep the active row in view for keyboard-only navigation.
-    useEffect(() => {
-        if (!open) return;
+        if (!open || !keyboardNav.current) return;
         listRef.current
             ?.querySelector<HTMLElement>('[data-active="true"]')
             ?.scrollIntoView({ block: "nearest" });
-    }, [active, open, filtered]);
+    }, [active, open]);
 
     useEffect(() => {
         if (!open) return;
@@ -123,7 +210,7 @@ export function Select({
         if (!open) {
             if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
                 e.preventDefault();
-                setOpen(true);
+                openList();
             }
             return;
         }
@@ -135,18 +222,22 @@ export function Select({
                 break;
             case "ArrowDown":
                 e.preventDefault();
+                keyboardNav.current = true;
                 setActive((i) => Math.min(i + 1, filtered.length - 1));
                 break;
             case "ArrowUp":
                 e.preventDefault();
+                keyboardNav.current = true;
                 setActive((i) => Math.max(i - 1, 0));
                 break;
             case "Home":
                 e.preventDefault();
+                keyboardNav.current = true;
                 setActive(0);
                 break;
             case "End":
                 e.preventDefault();
+                keyboardNav.current = true;
                 setActive(filtered.length - 1);
                 break;
             case "Enter":
@@ -166,7 +257,7 @@ export function Select({
                 aria-haspopup="listbox"
                 aria-label={ariaLabel}
                 disabled={disabled}
-                onClick={() => setOpen((o) => !o)}
+                onClick={() => (open ? setOpen(false) : openList())}
                 onKeyDown={handleKeyDown}
                 className="field-trigger focus-visible:border-b-(--sc-a) focus:outline-none"
             >
@@ -210,7 +301,7 @@ export function Select({
                         {filtered.length === 0 && (
                             <li className="px-4 py-3 text-sm text-fg-quaternary">No matches</li>
                         )}
-                        {filtered.map((option, index) => {
+                        {visible.map((option, index) => {
                             const isSelected = option.value === value;
                             return (
                                 <li key={option.value}>
@@ -219,9 +310,12 @@ export function Select({
                                         role="option"
                                         aria-selected={isSelected}
                                         data-active={index === active}
-                                        onMouseEnter={() => setActive(index)}
+                                        onMouseEnter={() => {
+                                            keyboardNav.current = false;
+                                            setActive(index);
+                                        }}
                                         onClick={() => commit(option)}
-                                        className={`w-full px-3 py-2.5 flex items-center gap-3 text-left text-sm transition-colors ${
+                                        className={`select-option w-full px-3 py-2.5 flex items-center gap-3 text-left text-sm transition-colors ${
                                             index === active ? "bg-white/6" : ""
                                         } ${isSelected ? "text-(--sc-a)" : "text-fg-secondary"}`}
                                     >
@@ -237,6 +331,21 @@ export function Select({
                                 </li>
                             );
                         })}
+
+                        {/*
+                          Watched by the observer above. Given a height so it is a
+                          real intersection target, and labelled so a screen reader
+                          hears why the list is still growing.
+                        */}
+                        {hasMore && (
+                            <li
+                                ref={sentinelRef}
+                                aria-live="polite"
+                                className="px-3 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-fg-quaternary"
+                            >
+                                Loading {filtered.length - mounted} more…
+                            </li>
+                        )}
                     </ul>
                 </div>
             )}
