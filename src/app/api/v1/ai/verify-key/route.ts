@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/backend/lib/supabase/server";
-import { isAiProvider, verifyKey } from "@/backend/lib/ai/verify-key";
+import { isCredentialProvider, verifyKey } from "@/backend/lib/ai/verify-key";
 import { logServerError } from "@/backend/lib/errors";
 
 /**
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { provider, apiKey } = body ?? {};
 
-        if (!isAiProvider(provider)) {
+        if (!isCredentialProvider(provider)) {
             return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
         }
         if (typeof apiKey !== "string" || !apiKey.trim()) {

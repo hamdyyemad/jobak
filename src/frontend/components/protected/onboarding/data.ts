@@ -127,3 +127,19 @@ export const aiProviderOptions: {
             tint: "#f55036",
         },
     ];
+
+/**
+ * Apify runs the actors that collect the listings, so it is required rather than
+ * chosen — it sits in its own block in step 6, above the model picker.
+ */
+export const apifyOption = {
+    value: "apify" as const,
+    label: "Apify",
+    model: "Job collection",
+    placeholder: "apify_api_…",
+    consoleUrl: "https://console.apify.com/settings/integrations",
+    consoleLabel: "console.apify.com",
+    // The orange from Apify's own symbol, so the tile's wash and underline sit
+    // in the same palette as the logo rather than near it.
+    tint: "#F86606",
+};

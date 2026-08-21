@@ -88,6 +88,31 @@ async function handleRefresh() {
     (Array.isArray(prefs.ai_providers) && prefs.ai_providers.find((p: string) => aiKeys[p])) ??
     Object.keys(aiKeys)[0];
 
+  /*
+   * Apify collects the listings, so a refresh without it has nothing to score.
+   * Rows written before Apify became mandatory have no token — those users are
+   * sent back to onboarding rather than silently running an empty search.
+   */
+  let apifyKey = "";
+  if (prefs.apify_key_encrypted) {
+    try {
+      apifyKey = await decryptApiKey(prefs.apify_key_encrypted);
+    } catch (decryptError) {
+      logServerError("jobs/refresh:decrypt-apify", decryptError);
+      return NextResponse.json(
+        { error: "We couldn't read your saved Apify token. Re-enter it to continue." },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (!apifyKey) {
+    return NextResponse.json(
+      { error: "No Apify token on file. Add one to start a search." },
+      { status: 400 }
+    );
+  }
+
   const n8nUrl = process.env.N8N_WEBHOOK_URL;
   const n8nSecret = process.env.N8N_WEBHOOK_SECRET;
 
@@ -113,6 +138,7 @@ async function handleRefresh() {
     salary: prefs.salary,
     aiProvider: preferredProvider,
     aiKeys,
+    apifyKey,
     groqApiKey: aiKeys.groq ?? "",
     timestamp: new Date().toISOString(),
   };

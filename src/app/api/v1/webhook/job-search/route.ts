@@ -3,6 +3,7 @@ import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
 import { encryptApiKey } from "@/backend/lib/crypto/api-key";
 import { isAiProvider } from "@/backend/lib/ai/verify-key";
+import { checkKeyFormat } from "@/frontend/lib/configs/provider-keys";
 import { toUserMessage, logServerError, isConnectionError } from "@/backend/lib/errors";
 import type { AiProvider } from "@/frontend/types/on-boarding";
 
@@ -48,11 +49,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    /*
+     * Apify is mandatory: it runs the actors that collect the listings, so a
+     * submission without it produces a workflow with nothing to score. Only the
+     * format is enforced here — the live check already happened at /ai/verify-key,
+     * and re-probing on submit would double every provider's rate limit.
+     */
+    const apifyKey = typeof body.apifyKey === "string" ? body.apifyKey.trim() : "";
+    const apifyFormat = checkKeyFormat("apify", apifyKey);
+    if (!apifyFormat.ok) {
+      return NextResponse.json(
+        { error: `Apify token is required. ${apifyFormat.reason}` },
+        { status: 400 }
+      );
+    }
+
     // ── 3. Encrypt every key + persist preferences ────────────
     const encryptedKeys: Partial<Record<AiProvider, string>> = {};
     for (const [provider, key] of keyEntries) {
       encryptedKeys[provider] = await encryptApiKey(key.trim());
     }
+    const encryptedApifyKey = await encryptApiKey(apifyKey);
 
     const location = {
       country: body.location?.country ?? "",
@@ -76,6 +93,7 @@ export async function POST(request: NextRequest) {
           salary: body.salary ?? { min: 0, max: 0, currency: "USD" },
           ai_providers: keyEntries.map(([provider]) => provider),
           ai_keys_encrypted: encryptedKeys,
+          apify_key_encrypted: encryptedApifyKey,
           // Kept in step with ai_keys_encrypted so anything still reading the
           // single-provider column keeps working.
           groq_api_key_encrypted: encryptedKeys.groq ?? null,
@@ -119,6 +137,7 @@ export async function POST(request: NextRequest) {
       // only. The first provider picked is the one the workflow should prefer.
       aiProvider: keyEntries[0][0],
       aiKeys: Object.fromEntries(keyEntries),
+      apifyKey,
       groqApiKey: submittedKeys.groq ?? "",
       timestamp: new Date().toISOString(),
     };

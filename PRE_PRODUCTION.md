@@ -179,6 +179,42 @@ and throttles to 12 checks/minute.
       `AIza`, `gsk_`. If a provider changes its key format, verification starts
       rejecting valid keys before it ever makes the request.
 
+## Apify + workflow v2 (added 2026-08-21)
+
+Onboarding now requires an Apify token alongside at least one AI model key, and
+`n8n/jobak-job-search-v2.json` replaces the raw-HTTP scraper with Apify actors.
+
+- [ ] **Run the Apify migration** at the bottom of `supabase/schema.sql`. It adds
+      `user_preferences.apify_key_encrypted`, seeds sources 4 and 5, and adds a
+      unique constraint on `regions.country_code`. It also **resets
+      `onboarding_completed` to false** for anyone who onboarded before Apify was
+      required — those users have no token and cannot run a search.
+- [ ] **Import and configure the v2 workflow.** Edit the `Set Config` node:
+      webhook secret, Supabase URL + service key, actor slugs, rows per source,
+      batch size, and the per-provider model ids. The old workflow's webhook path
+      is reused, so the app needs no env change — but do not leave both active.
+- [ ] **Confirm the two actors' output field names.** The normalizers read
+      several likely names per field (`jobUrl`/`url`/`link`, …) because actor
+      output is not a versioned contract. Run each actor once from the Apify
+      console, compare a real dataset row against `Normalize LinkedIn` /
+      `Normalize Indeed`, and pin the real names. A rename shows up as a run that
+      collects zero jobs, not as an error.
+- [ ] **Decide who pays for Apify.** Actors bill compute units against the
+      *user's* token. `rowsPerSource` (50 per source per run) is the cost dial.
+      Pair this with the rate limiting already tracked under "Functional gaps" —
+      nothing currently stops a user triggering repeated paid runs.
+- [ ] **Cost-check the scoring model per provider.** The Anthropic branch
+      defaults to `claude-opus-5` at `effort: low`; `claude-haiku-4-5` is far
+      cheaper if scoring quality allows. All four ids live in `Set Config`.
+- [ ] **The Anthropic branch must not send `temperature`.** Sampling parameters
+      are rejected with a 400 on current Opus/Sonnet models. The v1 workflow sent
+      `temperature: 0.1` to Groq; that value was not carried into the Anthropic
+      request in v2. Keep it that way if the request body is ever edited.
+- [ ] **Retire the v1 workflow** once v2 is verified. v1 scrapes Wuzzuf and
+      LinkedIn directly, which is the ToS exposure recorded under "Source
+      compliance" — moving collection to Apify actors is what reduces it, and
+      that only counts once v1 is off.
+
 ## Legal & compliance
 
 Deliberately deferred — the footer links were removed rather than left pointing at

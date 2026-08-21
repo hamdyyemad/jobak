@@ -48,13 +48,20 @@ export default function OnboardingPage() {
   const tint = useSceneTint(scene.countryCode, scene.tintOverride);
 
   /*
-   * Scoped to the providers still selected: verifying a key and then
-   * deselecting that provider would otherwise leave the finish button enabled
-   * with nothing to submit.
+   * Two independent requirements, both verified rather than merely filled in.
+   * The AI check is scoped to the providers still selected — verifying a key and
+   * then deselecting that provider would otherwise leave the finish button
+   * enabled with nothing to submit.
    */
-  const hasVerifiedProvider = data.aiProviders.some(
+  const apifyVerified = statusOf("apify").status === "valid";
+  const hasVerifiedAi = data.aiProviders.some(
     (provider) => statusOf(provider).status === "valid"
   );
+  const canSubmit = apifyVerified && hasVerifiedAi;
+
+  const submitHint = !apifyVerified
+    ? "Verify your Apify token to finish"
+    : "Verify at least one model key";
 
   const travel = {
     ...tint,
@@ -135,6 +142,7 @@ export default function OnboardingPage() {
               <StepApiKey
                 aiProviders={data.aiProviders}
                 aiKeys={data.aiKeys}
+                apifyKey={data.apifyKey}
                 statusOf={statusOf}
                 onVerify={verify}
                 onResetCheck={reset}
@@ -162,8 +170,8 @@ export default function OnboardingPage() {
         isFirstStep={isFirstStep}
         isLastStep={isLastStep}
         isSubmitting={isSubmitting}
-        canSubmit={hasVerifiedProvider}
-        submitHint="Test a key to finish"
+        canSubmit={canSubmit}
+        submitHint={submitHint}
         onBack={handleBack}
         onNext={handleNext}
         onSubmit={() => handleSubmit(data)}

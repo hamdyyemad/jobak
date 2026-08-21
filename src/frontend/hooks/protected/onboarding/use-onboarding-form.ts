@@ -15,6 +15,7 @@ const initialData: OnboardingData = {
     salary: { min: 0, max: 0, currency: "USD" },
     aiProviders: [],
     aiKeys: {},
+    apifyKey: "",
 };
 
 export function useOnboardingForm() {

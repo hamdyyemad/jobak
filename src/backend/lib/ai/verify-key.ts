@@ -1,12 +1,20 @@
-import type { AiProvider } from "@/frontend/types/on-boarding";
+import type { CredentialProvider } from "@/frontend/types/on-boarding";
+import { checkKeyFormat } from "@/frontend/lib/configs/provider-keys";
+
+export {
+    AI_PROVIDERS,
+    CREDENTIAL_PROVIDERS,
+    isAiProvider,
+    isCredentialProvider,
+} from "@/frontend/lib/configs/provider-keys";
 
 /**
- * Live check that an API key works, per provider.
+ * Live check that a credential works, per provider.
  *
- * Every provider is probed with its *model list* endpoint rather than a
- * completion: listing models is authenticated, so it proves the key is real and
- * enabled, but it consumes no tokens and costs the user nothing. A key that can
- * list models is a key that can be used.
+ * Every provider is probed with a read-only endpoint — model lists for the LLMs,
+ * the account endpoint for Apify — rather than a completion or an actor run.
+ * They are authenticated, so they prove the key is real and enabled, but they
+ * consume no tokens and no compute units, and cost the user nothing.
  *
  * Keys are never logged and never persisted by this path — the caller decides
  * whether to store them after a pass.
@@ -25,7 +33,7 @@ interface Probe {
     headers: (key: string) => Record<string, string>;
 }
 
-const probes: Record<AiProvider, Probe> = {
+const probes: Record<CredentialProvider, Probe> = {
     anthropic: {
         url: "https://api.anthropic.com/v1/models?limit=1",
         headers: (key) => ({
@@ -45,33 +53,24 @@ const probes: Record<AiProvider, Probe> = {
         url: "https://api.groq.com/openai/v1/models",
         headers: (key) => ({ Authorization: `Bearer ${key}` }),
     },
+    apify: {
+        // Identifies the account behind the token. No actor is started, so this
+        // spends nothing from the user's compute-unit allowance.
+        url: "https://api.apify.com/v2/users/me",
+        headers: (key) => ({ Authorization: `Bearer ${key}` }),
+    },
 };
 
-export const AI_PROVIDERS = Object.keys(probes) as AiProvider[];
-
-export function isAiProvider(value: unknown): value is AiProvider {
-    return typeof value === "string" && (AI_PROVIDERS as string[]).includes(value);
-}
-
-/** Obvious-shape rejects, so a typo never costs a round trip to the provider. */
-const prefixes: Record<AiProvider, RegExp> = {
-    anthropic: /^sk-ant-/,
-    openai: /^sk-/,
-    gemini: /^AIza/,
-    groq: /^gsk_/,
-};
-
-export function looksLikeKey(provider: AiProvider, key: string): boolean {
-    return prefixes[provider].test(key.trim());
-}
-
-export async function verifyKey(provider: AiProvider, apiKey: string): Promise<KeyCheckResult> {
+export async function verifyKey(
+    provider: CredentialProvider,
+    apiKey: string
+): Promise<KeyCheckResult> {
     const key = apiKey.trim();
 
-    if (!key) return { valid: false, detail: "No key provided." };
-    if (!looksLikeKey(provider, key)) {
-        return { valid: false, detail: "That doesn't look like a key for this provider." };
-    }
+    // Same rules the browser applied before sending. Re-run here because a
+    // client-side check is a convenience for the user, never a control.
+    const format = checkKeyFormat(provider, key);
+    if (!format.ok) return { valid: false, detail: format.reason };
 
     const probe = probes[provider];
 

@@ -25,6 +25,7 @@ export function useOnboardingSubmit() {
           .map((provider) => [provider, data.aiKeys[provider]?.trim()])
           .filter(([, key]) => Boolean(key))
       ),
+      apifyKey: data.apifyKey.trim(),
     };
 
     try {

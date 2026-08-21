@@ -79,6 +79,10 @@ CREATE TABLE user_preferences (
                            CHECK (ai_providers <@ ARRAY['anthropic', 'openai', 'gemini', 'groq']),
   -- { provider: "iv:ciphertext" }, each value AES-256-GCM encrypted.
   ai_keys_encrypted      JSONB DEFAULT '{}'::jsonb,
+  -- Apify runs the collection actors. Mandatory from onboarding onward, but the
+  -- column stays nullable so rows created before it existed still load; the API
+  -- sends those users back to onboarding instead of running an empty search.
+  apify_key_encrypted    TEXT,
   -- Superseded by ai_keys_encrypted->>'groq'. Still written and still read as a
   -- fallback for rows created before multi-provider support.
   groq_api_key_encrypted TEXT,
@@ -199,3 +203,38 @@ UPDATE user_preferences
          'worldwide', COALESCE((location->>'worldwide')::boolean, false)
        )
  WHERE location ? 'city';
+
+-- ============================================================
+-- Migration — Apify credential (2026-08-21)
+-- ============================================================
+-- Safe to run more than once.
+
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS apify_key_encrypted TEXT;
+
+-- Rows onboarded before Apify was required have no token. They cannot run a
+-- search, so mark them incomplete and let onboarding collect one.
+UPDATE user_preferences
+   SET onboarding_completed = false
+ WHERE apify_key_encrypted IS NULL
+   AND onboarding_completed = true;
+
+-- Sources the v2 workflow writes. `id` is referenced directly by the normalizer,
+-- so keep these ids stable.
+INSERT INTO sources (id, name, display_name, url) VALUES
+  (4, 'apify_linkedin', 'LinkedIn (via Apify)', 'https://www.linkedin.com'),
+  (5, 'apify_indeed',   'Indeed (via Apify)',   'https://www.indeed.com')
+ON CONFLICT (id) DO NOTHING;
+
+SELECT setval('sources_id_seq', GREATEST((SELECT MAX(id) FROM sources), 1));
+
+-- Regions are looked up by ISO code now that onboarding stores alpha-2, so the
+-- workflow can upsert one on demand. Guarded because ADD CONSTRAINT has no
+-- IF NOT EXISTS form.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'regions_country_code_key'
+  ) THEN
+    ALTER TABLE regions ADD CONSTRAINT regions_country_code_key UNIQUE (country_code);
+  END IF;
+END $$;
