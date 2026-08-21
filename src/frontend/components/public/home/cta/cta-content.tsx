@@ -1,14 +1,16 @@
+import Link from "next/link";
 import { Button } from "@/frontend/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { resolveCta } from "@/frontend/lib/configs/cta";
 import { ctaContent } from "./data";
 
-export function CtaContent() {
+export function CtaContent({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   return (
     <div className="flex-1">
       <Heading />
       <Description />
-      <ActionButtons />
-      <Disclaimer />
+      <ActionButtons isAuthenticated={isAuthenticated} />
+      <Disclaimer isAuthenticated={isAuthenticated} />
     </div>
   );
 }
@@ -31,7 +33,9 @@ function Description() {
   );
 }
 
-function ActionButtons() {
+function ActionButtons({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const { text, href } = resolveCta(isAuthenticated, ctaContent.primaryButton.text);
+
   return (
     <div className="flex flex-col sm:flex-row items-start gap-4">
       <Button
@@ -39,10 +43,10 @@ function ActionButtons() {
         className="bg-accent hover:bg-accent-bright text-(--bg-canvas) px-8 h-14 text-base rounded-full group font-medium"
         asChild
       >
-        <a href={ctaContent.primaryButton.href}>
-          {ctaContent.primaryButton.text}
+        <Link href={href}>
+          {text}
           <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
-        </a>
+        </Link>
       </Button>
       <Button
         size="lg"
@@ -50,15 +54,18 @@ function ActionButtons() {
         className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
         asChild
       >
-        <a href={ctaContent.secondaryButton.href}>
+        <Link href={ctaContent.secondaryButton.href}>
           {ctaContent.secondaryButton.text}
-        </a>
+        </Link>
       </Button>
     </div>
   );
 }
 
-function Disclaimer() {
+/** Signup reassurance ("no credit card required") means nothing once you have an account. */
+function Disclaimer({ isAuthenticated }: { isAuthenticated: boolean }) {
+  if (isAuthenticated) return null;
+
   return (
     <p className="text-sm text-muted-foreground mt-8 font-mono">
       {ctaContent.disclaimer}

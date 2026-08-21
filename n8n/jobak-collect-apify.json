@@ -1,0 +1,379 @@
+{
+  "name": "Jobak — Collect (Apify, per user, every 12h)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "id": "every-12-hours",
+      "name": "Every 12 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────\n// EDIT THESE BEFORE ACTIVATING — same values in all three workflows\n// ─────────────────────────────────────────────────────────────\nconst APP_URL        = 'https://YOUR-APP.vercel.app';\nconst WEBHOOK_SECRET = 'CHANGE_ME_same_as_N8N_WEBHOOK_SECRET';\nconst SUPABASE_URL   = 'https://YOUR-PROJECT.supabase.co';\nconst SUPABASE_KEY   = 'YOUR_SERVICE_ROLE_KEY';\nconst SCRAPER_URL    = 'https://YOUR-SCRAPER.vercel.app';\nconst SCRAPER_SECRET = 'CHANGE_ME_same_as_SCRAPER_SECRET';\n\n// Listings pulled per search term, per source.\nconst LIMIT_PER_TERM = 40;\n\n// Company slugs for the ATS sources — first-party listings, free, but you have\n// to name the companies. Grow this list over time.\nconst ATS = { greenhouse: [], ashby: [], workable: [] };\n\n// Jobs sent to the model in one request.\nconst SCORE_BATCH_SIZE = 15;\n\nconst MODELS = {\n  anthropic: 'claude-opus-5',\n  openai:    'gpt-4o-mini',\n  gemini:    'gemini-2.0-flash',\n  groq:      'llama-3.3-70b-versatile'\n};\n\nreturn { json: {\n  appUrl: APP_URL, webhookSecret: WEBHOOK_SECRET,\n  supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY,\n  scraperUrl: SCRAPER_URL, scraperSecret: SCRAPER_SECRET,\n  limitPerTerm: LIMIT_PER_TERM, ats: ATS,\n  scoreBatchSize: SCORE_BATCH_SIZE, models: MODELS\n} };"
+      },
+      "id": "set-config",
+      "name": "Set Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.appUrl }}/api/v1/internal/collect-targets",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'x-webhook-secret': $json.webhookSecret }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "get-apify-users",
+      "name": "Get Apify Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per (user, term). A user's paid token only ever runs that user's own\n// search — the results land in the shared pool and help everyone, but nobody's\n// credits are spent on a search they did not ask for.\nconst payload = $input.first().json;\nconst body = Array.isArray(payload.apifyUsers) ? payload : payload.body;\nconst users = (body && body.apifyUsers) || [];\n\nif (users.length === 0) {\n  console.log('No users have connected an Apify token — nothing to do.');\n  return [];\n}\n\nconst out = [];\nfor (const u of users) {\n  for (const term of u.terms) {\n    const country = u.worldwide ? null : (u.countries[0] || null);\n    out.push({ json: {\n      _target: { term, countryCode: country },\n      userId: u.userId, apifyKey: u.apifyKey, term,\n      countryCode: country, worldwide: u.worldwide, workPreference: u.workPreference\n    } });\n  }\n}\nconsole.log('Apify: ' + out.length + ' run(s) across ' + users.length + ' user(s)');\nreturn out;"
+      },
+      "id": "split-apify-jobs",
+      "name": "Split Apify Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "apify-loop",
+      "name": "Apify Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enum values come from each actor's published input schema: LinkedIn workType\n// 1/2/3 = On-Site/Remote/Hybrid, publishedAt r86400/r604800/r2592000.\nconst p = $input.item.json;\n\nlet countryName = p.countryCode || '';\nif (p.countryCode) {\n  try { countryName = new Intl.DisplayNames(['en'], { type: 'region' }).of(p.countryCode) || p.countryCode; }\n  catch (e) { countryName = p.countryCode; }\n}\nconst location = p.worldwide || !countryName ? 'Worldwide' : countryName;\n\nconst workTypeMap = { 'remote': '2', 'on-site': '1', 'hybrid': '3' };\nconst workType = (p.workPreference || []).length === 1 ? (workTypeMap[p.workPreference[0]] || '') : '';\n\nconst linkedInInput = {\n  title: p.term, location, rows: 50, publishedAt: 'r604800',\n  proxy: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] }\n};\nif (workType) linkedInInput.workType = workType;\n\nreturn { json: { ...p, linkedInInput } };"
+      },
+      "id": "build-actor-input",
+      "name": "Build Actor Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/bebity~linkedin-jobs-scraper/run-sync-get-dataset-items",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'Authorization': 'Bearer ' + $json.apifyKey, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.linkedInInput) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "apify---linkedin",
+      "name": "Apify - LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Actor output is not a versioned contract, so every field is read from a list\n// of likely names. A rename shows up as a run that collects nothing, rather\n// than a crash.\nfunction pick(obj, keys, fallback) {\n  for (const k of keys) {\n    const v = k.split('.').reduce((o, part) => (o == null ? o : o[part]), obj);\n    if (v !== undefined && v !== null && v !== '') return v;\n  }\n  return fallback;\n}\nconst clean = s => String(s == null ? '' : s).replace(/\\s+/g, ' ').trim();\n\nconst target = $('Apify Loop').first().json._target || {};\nconst rows = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (Array.isArray(j)) rows.push(...j);\n  else if (Array.isArray(j.body)) rows.push(...j.body);\n}\n\nif (rows.length === 0) {\n  console.log('Apify returned 0 rows for \"' + (target.term || '?') + '\"');\n  return [{ json: { _target: target } }];\n}\n\nconst out = [];\nconst seen = new Set();\nfor (const r of rows) {\n  const apply_url = clean(pick(r, ['jobUrl', 'url', 'link', 'applyUrl'], ''));\n  const title = clean(pick(r, ['title', 'jobTitle', 'position'], ''));\n  if (!apply_url || !title || seen.has(apply_url)) continue;\n  seen.add(apply_url);\n\n  const location = clean(pick(r, ['location', 'jobLocation', 'place'], ''));\n  const raw = (title + ' ' + location + ' ' + clean(pick(r, ['workType', 'workplaceType'], ''))).toLowerCase();\n  let job_type = 'onsite';\n  if (raw.includes('remote')) job_type = 'remote';\n  else if (raw.includes('hybrid')) job_type = 'hybrid';\n\n  out.push({\n    title, company: clean(pick(r, ['companyName', 'company'], 'Unknown')),\n    location: location || 'Not specified', job_type,\n    description: clean(pick(r, ['description', 'descriptionText'], '')).substring(0, 4000),\n    apply_url,\n    salary_text: clean(pick(r, ['salary', 'salaryInfo'], '')) || null,\n    posted_at_source: pick(r, ['publishedAt', 'datePosted', 'postedAt'], null),\n    source_key: 'apify_linkedin',\n    external_id: String(pick(r, ['id', 'jobId'], apply_url)),\n    _countryCode: target.countryCode,\n    _target: target\n  });\n}\nconsole.log('Apify LinkedIn: ' + out.length + ' jobs for \"' + (target.term || '?') + '\"');\nreturn out.map(j => ({ json: j }));"
+      },
+      "id": "normalize-apify",
+      "name": "Normalize Apify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Shapes collected jobs into `jobs` rows.\n//\n// Everything that reaches a typed column is validated here: this is a bulk\n// insert, so one unparseable timestamp or out-of-range enum fails every row in\n// the batch rather than only its own.\nconst SOURCE_IDS = {\n  wuzzuf: 1, remoteok: 2, remotive: 3,\n  apify_linkedin: 4, apify_indeed: 5,\n  linkedin: 4, indeed: 5,\n  arbeitnow: 6, jobicy: 7, himalayas: 8, weworkremotely: 9,\n  greenhouse: 10, ashby: 11, workable: 12\n};\nconst JOB_TYPES = ['remote', 'onsite', 'hybrid'];\n\n/*\n * Anything a source calls a date, turned into ISO or null.\n *\n * A plain `new Date(v)` is not enough: Indeed and Wuzzuf report \"8 days ago\"\n * and \"Just posted\", which parse as Invalid Date and would silently discard a\n * real posting date. The scraper service already normalises its own sources,\n * but Apify actor output arrives raw, so the parser has to live here too.\n * Null is still the fallback — `posted_at_source` is timestamptz and this\n * insert is bulk, so one bad value fails every row in the batch.\n */\nfunction toTimestamp(value) {\n  if (value === null || value === undefined) return null;\n\n  if (typeof value === 'number' && isFinite(value)) {\n    const d = new Date(value > 1e12 ? value : value * 1000);\n    return isNaN(d.getTime()) ? null : d.toISOString();\n  }\n\n  const raw = String(value).trim();\n  if (!raw) return null;\n  const lower = raw.toLowerCase();\n\n  if (/^(just posted|just now|today|active today|posted today|new)$/.test(lower)) return new Date().toISOString();\n  if (/^(yesterday|posted yesterday)$/.test(lower)) return new Date(Date.now() - 864e5).toISOString();\n\n  const rel = lower.match(/^(?:posted\\s+|active\\s+)?(\\d+)\\+?\\s*(minute|hour|day|week|month|year)s?\\s+ago$/);\n  if (rel) {\n    const unit = { minute: 6e4, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 };\n    return new Date(Date.now() - parseInt(rel[1], 10) * unit[rel[2]]).toISOString();\n  }\n\n  // A bare number as a string is ambiguous — \"8\" parses as the year 2001.\n  if (/^\\d{1,4}$/.test(raw)) return null;\n\n  const parsed = new Date(raw);\n  return isNaN(parsed.getTime()) ? null : parsed.toISOString();\n}\n\nconst items = $input.all().map(i => i.json).filter(j => j && j.apply_url && j.title);\nconst target = $input.first().json._target || {};\n\nif (items.length === 0) {\n  return [{ json: { _empty: true, rows: [], found: 0, term: target.term || '', countryCode: target.countryCode || null } }];\n}\n\nconst rows = items.map(j => ({\n  title: String(j.title).substring(0, 300),\n  company: String(j.company || 'Unknown').substring(0, 200),\n  location: String(j.location || '').substring(0, 200),\n  job_type: JOB_TYPES.includes(j.job_type) ? j.job_type : 'onsite',\n  description: String(j.description || '').substring(0, 8000),\n  apply_url: j.apply_url,\n  salary_text: j.salary_text || null,\n  posted_at_source: toTimestamp(j.posted_at_source),\n  // Scoring is per-user and happens later, so the pool stores no score and no\n  // seniority guess — only what the source actually said.\n  source_id: SOURCE_IDS[j.source_key] || null,\n  country_code: j._countryCode || target.countryCode || null,\n  external_id: String(j.external_id || j.apply_url).substring(0, 200),\n  is_relevant: true,\n  is_active: true\n}));\n\nconsole.log('Prepared ' + rows.length + ' rows for \"' + (target.term || '?') + '\"');\nreturn [{ json: { _empty: false, rows, found: rows.length, term: target.term || '', countryCode: target.countryCode || null } }];"
+      },
+      "id": "prepare-job-rows",
+      "name": "Prepare Job Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.supabaseUrl }}/rest/v1/jobs?on_conflict=apply_url",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $('Set Config').first().json.supabaseKey, 'Authorization': 'Bearer ' + $('Set Config').first().json.supabaseKey, 'Content-Type': 'application/json', 'Prefer': 'return=representation,resolution=merge-duplicates' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rows) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "insert-jobs-bulk",
+      "name": "Insert Jobs (bulk)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2560,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const COLLECTOR = 'apify';\n// Records what the run actually did. Scheduled collectors are unattended, so\n// \"did the 03:00 run work\" needs an answer that does not involve opening n8n.\nconst prepared = $('Prepare Job Rows').first().json;\nconst response = $input.first().json;\n\nlet inserted = 0;\nif (Array.isArray(response)) inserted = response.length;\nelse if (Array.isArray(response.body)) inserted = response.body.length;\n\nconst ok = !(response && response.code && response.message);\n\nreturn [{ json: {\n  collector: COLLECTOR,\n  term: prepared.term || null,\n  country_code: prepared.countryCode || null,\n  found: prepared.found || 0,\n  inserted,\n  ok,\n  detail: ok ? null : String(response.message).substring(0, 400)\n} }];"
+      },
+      "id": "build-run-log",
+      "name": "Build Run Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.supabaseUrl }}/rest/v1/collection_runs",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $('Set Config').first().json.supabaseKey, 'Authorization': 'Bearer ' + $('Set Config').first().json.supabaseKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "log-run",
+      "name": "Log Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3040,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Every 12 Hours": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Config": {
+      "main": [
+        [
+          {
+            "node": "Get Apify Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Apify Users": {
+      "main": [
+        [
+          {
+            "node": "Split Apify Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Apify Jobs": {
+      "main": [
+        [
+          {
+            "node": "Apify Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify Loop": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Build Actor Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Actor Input": {
+      "main": [
+        [
+          {
+            "node": "Apify - LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Normalize Apify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Apify": {
+      "main": [
+        [
+          {
+            "node": "Prepare Job Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Job Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Jobs (bulk)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Jobs (bulk)": {
+      "main": [
+        [
+          {
+            "node": "Build Run Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Run Log": {
+      "main": [
+        [
+          {
+            "node": "Log Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Run": {
+      "main": [
+        [
+          {
+            "node": "Apify Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Jobak"
+    }
+  ]
+}

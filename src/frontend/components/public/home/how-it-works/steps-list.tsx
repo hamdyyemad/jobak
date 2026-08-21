@@ -56,16 +56,7 @@ function StepButton({ step, isActive, onClick }: StepButtonProps) {
 function ProgressBar() {
   return (
     <div className="mt-4 h-px bg-background/20 overflow-hidden">
-      <div 
-        className="h-full bg-background w-0" 
-        style={{ animation: "progress 5s linear forwards" }} 
-      />
-      <style jsx>{`
-        @keyframes progress {
-          from { width: 0%; }
-          to { width: 100%; }
-        }
-      `}</style>
+      <div className="h-full w-full origin-left bg-background progress-bar" />
     </div>
   );
 }

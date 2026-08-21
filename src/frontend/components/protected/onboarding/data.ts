@@ -1,4 +1,4 @@
-import { WorkPreference, JobType, Seniority } from "../../../types/on-boarding";
+import { WorkPreference, JobType, Seniority, AiProvider } from "../../../types/on-boarding";
 
 export const workOptions: { value: WorkPreference; label: string; description: string; icon: string }[] = [
     { value: "remote", label: "Remote", description: "Work from anywhere in the world", icon: "🌍" },
@@ -20,27 +20,105 @@ export const seniorityOptions: { value: Seniority; label: string; years: string 
     { value: "lead", label: "Lead / Staff", years: "10+ years" },
 ];
 
+/**
+ * Seniority is no longer asked for directly — step 3 already collects the exact
+ * number of years, and asking twice was the same question in two costumes. The
+ * derived value stays overridable, because titles and years diverge in practice.
+ */
+export function seniorityFromExperience(years: number): Seniority {
+    if (years < 2) return "entry";
+    if (years < 5) return "mid";
+    if (years < 10) return "senior";
+    return "lead";
+}
+
+/** Mono eyebrow above each heading — the frame's instrument labelling. */
+export const stepKickers = [
+    "Work mode",
+    "Location",
+    "Discipline",
+    "Target role",
+    "Intelligence",
+];
+
 export const stepTitles = [
     "How do you prefer to work?",
-    "Where are you located?",
+    "Where are you looking?",
     "What's your field?",
     "What are you looking for?",
-    "Salary expectations",
     "Connect your AI",
 ];
 
 export const stepDescriptions = [
-    "Select your preferred work arrangement.",
-    "We'll use this to surface the most relevant opportunities.",
+    "Pick every arrangement you'd accept — you can choose more than one.",
+    "Search one market, several, or everywhere.",
     "Tell us your profession and the skills you bring.",
-    "Define your ideal job type and seniority level.",
-    "Help us filter opportunities within your range.",
-    "Provide your Grok API key to power personalized matching.",
+    "Define your ideal job type and the roles you're after.",
+    "Choose a provider and add its key — we'll verify it before you continue.",
 ];
 
-export const currencyOptions = [
-    { value: "USD", label: "USD — US Dollar ($)" },
-    { value: "EUR", label: "EUR — Euro (€)" },
-    { value: "GBP", label: "GBP — British Pound (£)" },
-    { value: "EGP", label: "EGP — Egyptian Pound (E£)" },
-];
+
+export const aiProviderOptions: {
+    value: AiProvider;
+    label: string;
+    model: string;
+    placeholder: string;
+    /** Where the user goes to mint a key, linked from the card. */
+    consoleUrl: string;
+    consoleLabel: string;
+    /** Brand colour, used for the card's selected state. */
+    tint: string;
+}[] = [
+        {
+            value: "anthropic",
+            label: "Claude",
+            model: "Anthropic",
+            placeholder: "sk-ant-…",
+            consoleUrl: "https://console.anthropic.com/settings/keys",
+            consoleLabel: "console.anthropic.com",
+            tint: "#d97757",
+        },
+        {
+            value: "openai",
+            label: "ChatGPT",
+            model: "OpenAI",
+            placeholder: "sk-…",
+            consoleUrl: "https://platform.openai.com/api-keys",
+            consoleLabel: "platform.openai.com",
+            tint: "#10a37f",
+        },
+        {
+            value: "gemini",
+            label: "Gemini",
+            model: "Google",
+            placeholder: "AIza…",
+            consoleUrl: "https://aistudio.google.com/app/apikey",
+            consoleLabel: "aistudio.google.com",
+            tint: "#4285f4",
+        },
+        {
+            value: "groq",
+            label: "Groq",
+            model: "Groq Cloud",
+            placeholder: "gsk_…",
+            consoleUrl: "https://console.groq.com/keys",
+            consoleLabel: "console.groq.com",
+            tint: "#f55036",
+        },
+    ];
+
+/**
+ * Apify runs the actors that collect the listings, so it is required rather than
+ * chosen — it sits in its own block in step 6, above the model picker.
+ */
+export const apifyOption = {
+    value: "apify" as const,
+    label: "Apify",
+    model: "Job collection",
+    placeholder: "apify_api_…",
+    consoleUrl: "https://console.apify.com/settings/integrations",
+    consoleLabel: "console.apify.com",
+    // The orange from Apify's own symbol, so the tile's wash and underline sit
+    // in the same palette as the logo rather than near it.
+    tint: "#F86606",
+};

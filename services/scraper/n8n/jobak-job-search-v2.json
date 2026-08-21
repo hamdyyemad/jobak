@@ -1,0 +1,881 @@
+{
+  "name": "Jobak v2 — Apify collect & multi-provider AI match",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobak-job-search",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        800
+      ],
+      "webhookId": "jobak-job-search"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────\n// EDIT THESE BEFORE ACTIVATING\n// ─────────────────────────────────────────────────────────────\nconst WEBHOOK_SECRET = 'CHANGE_ME_same_as_N8N_WEBHOOK_SECRET';\nconst SUPABASE_URL   = 'https://YOUR-PROJECT.supabase.co';\nconst SUPABASE_KEY   = 'YOUR_SERVICE_ROLE_KEY';\n\n// The self-hosted scraper (see scraper/README.md). Free sources, no per-request\n// cost — this is the primary collector.\nconst SCRAPER_URL    = 'https://YOUR-SCRAPER.vercel.app';\nconst SCRAPER_SECRET = 'CHANGE_ME_same_as_SCRAPER_SECRET';\n\n// Company slugs to pull from applicant tracking systems. First-party listings,\n// highest quality of anything here, free — but you must name the companies.\nconst ATS = {\n  greenhouse: [],\n  ashby: [],\n  workable: []\n};\n\n// Apify is now OPTIONAL and only worth running for LinkedIn and Indeed, which\n// need residential IPs. Skipped entirely when the user connected no token.\n// Slugs verified against the Apify store; input schemas are pinned to what each\n// actor's build actually declares.\nconst ACTOR_LINKEDIN = 'bebity~linkedin-jobs-scraper';\nconst ACTOR_INDEED   = 'misceres~indeed-scraper';\n\n// How many listings to pull per source, per run. Apify bills by compute unit,\n// and the user's own token pays — keep this modest.\nconst ROWS_PER_SOURCE = 50;\n\n// Jobs sent to the model in one request. Scoring one job per call (the v1\n// behaviour) meant N API calls per run; batching cuts that by ~15x.\nconst SCORE_BATCH_SIZE = 15;\n\n// Model per provider. The user chooses the provider in onboarding; this maps\n// that choice to a model id. Change any of these to trade cost for quality —\n// it is the user's own key being billed.\nconst MODELS = {\n  anthropic: 'claude-opus-5',\n  openai:    'gpt-4o-mini',\n  gemini:    'gemini-2.0-flash',\n  groq:      'llama-3.3-70b-versatile'\n};\n\nreturn { json: {\n  webhookSecret: WEBHOOK_SECRET,\n  supabaseUrl:   SUPABASE_URL,\n  supabaseKey:   SUPABASE_KEY,\n  scraperUrl:    SCRAPER_URL,\n  scraperSecret: SCRAPER_SECRET,\n  ats:           ATS,\n  actorLinkedIn: ACTOR_LINKEDIN,\n  actorIndeed:   ACTOR_INDEED,\n  rowsPerSource: ROWS_PER_SOURCE,\n  scoreBatchSize: SCORE_BATCH_SIZE,\n  models: MODELS\n} };"
+      },
+      "id": "set-config",
+      "name": "Set Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "secret-check",
+              "leftValue": "={{ $('Webhook Trigger').first().json.headers['x-webhook-secret'] }}",
+              "rightValue": "={{ $('Set Config').first().json.webhookSecret }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "validate-secret",
+      "name": "Validate Secret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"error\": \"Unauthorized\" }",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "reject-unauthorized",
+      "name": "Reject Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        980
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalises the v2 payload from /api/v1/webhook/job-search.\n//\n// Changed since v1 and worth knowing: `workPreference` is an ARRAY, `location`\n// is `{ countries: [<ISO alpha-2>, …], worldwide: bool }` (no `city`, and\n// `country` became a list), `salary` is gone entirely, there is a new\n// `jobTitles` array, and credentials arrive as `aiKeys` + `apifyKey` rather\n// than a single `groqApiKey`.\nconst body   = $('Webhook Trigger').first().json.body || {};\nconst config = $('Set Config').first().json;\n\n// `location.countries` is a list — the picker is multi-select. A single-country\n// payload from an older client still works.\nconst rawCountries = body.location?.countries ?? body.location?.country;\nconst countryCodes = (Array.isArray(rawCountries) ? rawCountries : [rawCountries])\n  .filter(Boolean)\n  .map(c => String(c).toUpperCase());\nconst worldwide = Boolean(body.location?.worldwide);\n\n// Onboarding stores ISO codes; the scrapers want human names. Intl ships with\n// Node, so no country table has to be maintained here.\nconst display = (() => {\n  try { return new Intl.DisplayNames(['en'], { type: 'region' }); }\n  catch (e) { return null; }\n})();\nconst countries = countryCodes.map(code => ({\n  code,\n  name: (display && display.of(code)) || code\n}));\n\nconst aiKeys = body.aiKeys || {};\n// Prefer the provider the app nominated, but only if its key actually arrived.\nconst aiProvider = (body.aiProvider && aiKeys[body.aiProvider])\n  ? body.aiProvider\n  : Object.keys(aiKeys)[0];\n\nif (!aiProvider) throw new Error('No AI provider key in payload — cannot score.');\n\n// Apify is optional now: the self-hosted scraper covers the free sources, and\n// Apify only adds LinkedIn/Indeed. No token simply means those are skipped.\nconst apifyKey = body.apifyKey || '';\n\n// Field arrives as a slug (\"software-engineering\"); turn it back into words.\nconst fieldWords = String(body.field || '')\n  .split('-').filter(Boolean)\n  .map(w => w.charAt(0).toUpperCase() + w.slice(1))\n  .join(' ');\n\nconst jobTitles = Array.isArray(body.jobTitles) ? body.jobTitles.filter(Boolean) : [];\n\nreturn { json: {\n  userId:         body.userId,\n  workPreference: Array.isArray(body.workPreference) ? body.workPreference : [body.workPreference].filter(Boolean),\n  worldwide,\n  countries,\n  field:          body.field || '',\n  fieldWords:     fieldWords || 'Software Engineering',\n  jobTitles,\n  skills:         body.skills || [],\n  experience:     body.experience || 0,\n  jobType:        body.jobType || [],\n  seniority:      body.seniority || 'mid',\n  aiProvider,\n  aiApiKey:       aiKeys[aiProvider],\n  aiModel:        config.models[aiProvider],\n  apifyKey,\n  useApify:       Boolean(apifyKey),\n  scraperUrl:     config.scraperUrl,\n  scraperSecret:  config.scraperSecret,\n  ats:            config.ats,\n  supabaseUrl:    config.supabaseUrl,\n  supabaseKey:    config.supabaseKey,\n  actorLinkedIn:  config.actorLinkedIn,\n  actorIndeed:    config.actorIndeed,\n  rowsPerSource:  config.rowsPerSource,\n  scoreBatchSize: config.scoreBatchSize,\n  timestamp:      new Date().toISOString()\n} };"
+      },
+      "id": "extract-preferences",
+      "name": "Extract Preferences",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds each actor's input from the user's preferences.\n//\n// Enum values below are taken from the actors' published input schemas, not\n// guessed: LinkedIn workType 1/2/3 = On-Site/Remote/Hybrid, contractType\n// F/P/C/T/I/V, experienceLevel 1..5, publishedAt r86400/r604800/r2592000.\nconst p = $input.item.json;\n\n// Search term: a chosen job title beats the broad field — it is what the user\n// actually asked for. Extra titles are dropped; both actors take one query.\nconst searchTerm = p.jobTitles[0] || p.fieldWords;\n\n// Only constrain workplace type when the user picked exactly one. With several\n// selected, filtering to one would hide the others; the model filters later.\nconst workTypeMap = { 'remote': '2', 'on-site': '1', 'hybrid': '3' };\nconst workType = p.workPreference.length === 1 ? (workTypeMap[p.workPreference[0]] || '') : '';\n\nconst contractMap = { 'full-time': 'F', 'part-time': 'P', 'contract': 'C', 'freelance': 'C' };\nconst contractType = p.jobType.length === 1 ? (contractMap[p.jobType[0]] || '') : '';\n\nconst experienceMap = { entry: '2', mid: '3', senior: '4', lead: '5' };\nconst experienceLevel = experienceMap[p.seniority] || '';\n\n// One target per selected country. `location` is required by the LinkedIn\n// actor, so a worldwide search still needs a value — LinkedIn accepts\n// \"Worldwide\" as a location in its own UI.\n//\n// Each target becomes its own item, so the Apify nodes run once per country.\n// That is the honest cost model: searching three countries runs three actor\n// jobs per source and bills the user's token three times.\nconst targets = p.worldwide || p.countries.length === 0\n  ? [{ code: '', name: 'Worldwide' }]\n  : p.countries;\n\nreturn targets.map(target => {\n  const linkedInInput = {\n    title: searchTerm,\n    location: target.name,\n    rows: p.rowsPerSource,\n    publishedAt: 'r604800',\n    proxy: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] }\n  };\n  if (workType)        linkedInInput.workType = workType;\n  if (contractType)    linkedInInput.contractType = contractType;\n  if (experienceLevel) linkedInInput.experienceLevel = experienceLevel;\n\n  const indeedInput = {\n    position: searchTerm,\n    country: target.code || 'US',\n    location: target.code ? target.name : '',\n    maxItemsPerSearch: p.rowsPerSource,\n    parseCompanyDetails: false,\n    saveOnlyUniqueItems: true,\n    followApplyRedirects: false\n  };\n\n  console.log('Target:', target.name, '| term:', searchTerm, '| workType:', workType || '(any)');\n  return { json: { ...p, target, searchTerm, linkedInInput, indeedInput } };\n});"
+      },
+      "id": "build-apify-inputs",
+      "name": "Build Apify Inputs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{ $json.actorLinkedIn }}/run-sync-get-dataset-items",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'Authorization': 'Bearer ' + $json.apifyKey, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.linkedInInput) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "apify---linkedin-jobs",
+      "name": "Apify - LinkedIn Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        440
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{ $json.actorIndeed }}/run-sync-get-dataset-items",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'Authorization': 'Bearer ' + $json.apifyKey, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.indeedInput) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "apify---indeed-jobs",
+      "name": "Apify - Indeed Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        1160
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.scraperUrl }}/api/scrape",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'x-scraper-secret': $json.scraperSecret, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: $json.searchTerm, countries: $json.target.code ? [$json.target] : [], worldwide: !$json.target.code, workPreference: $json.workPreference, limit: $json.rowsPerSource, ats: $json.ats }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 90000
+        }
+      },
+      "id": "scrape-free-sources",
+      "name": "Scrape Free Sources",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        800
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The scraper already returns the unified schema, so there is nothing to map —\n// only to check that it answered and to surface per-source outcomes in the log.\nconst out = [];\nfor (const item of $input.all()) {\n  const body = item.json && (Array.isArray(item.json.jobs) ? item.json : item.json.body);\n  if (!body || !Array.isArray(body.jobs)) {\n    console.log('Scraper returned no usable payload: ' + JSON.stringify(item.json).substring(0, 300));\n    continue;\n  }\n  for (const r of (body.meta?.sources || [])) {\n    console.log('  ' + r.source.padEnd(16) + (r.ok ? 'ok  ' : 'FAIL') + ' ' + r.count + ' in ' + r.ms + 'ms' + (r.error ? ' — ' + r.error : ''));\n  }\n  out.push(...body.jobs);\n}\nconsole.log('Scraper: ' + out.length + ' jobs');\nreturn out.map(j => ({ json: j }));"
+      },
+      "id": "normalize-scraper",
+      "name": "Normalize Scraper",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        800
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "apify-check",
+              "leftValue": "={{ $json.useApify }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "use-apify?",
+      "name": "Use Apify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Actor outputs are not a stable contract — field names differ between actors\n// and change between builds. Rather than hard-code one shape, take the first\n// key that exists from a list of likely names and log when nothing matches, so\n// a rename shows up as an empty run rather than a silent crash.\nfunction pick(obj, keys, fallback) {\n  for (const k of keys) {\n    const v = k.split('.').reduce((o, part) => (o == null ? o : o[part]), obj);\n    if (v !== undefined && v !== null && v !== '') return v;\n  }\n  return fallback;\n}\nfunction clean(s) {\n  return String(s == null ? '' : s).replace(/\\s+/g, ' ').trim();\n}\n/*\n * Job boards report dates however they like: an ISO string, an epoch number, or\n * — Indeed's default — a relative phrase like \"8 days ago\" or \"Just posted\".\n * `jobs.posted_at_source` is timestamptz, and Postgres rejects anything it\n * cannot parse with a 22007. Because the insert is bulk, one such row fails the\n * ENTIRE batch, so nothing that is not a real timestamp may reach the database.\n */\nfunction toTimestamp(value) {\n  if (value === null || value === undefined) return null;\n\n  if (typeof value === 'number') {\n    const ms = value > 1e12 ? value : value * 1000;   // seconds or milliseconds\n    const d = new Date(ms);\n    return isNaN(d.getTime()) ? null : d.toISOString();\n  }\n\n  const raw = String(value).trim();\n  if (!raw) return null;\n  const lower = raw.toLowerCase();\n\n  if (/^(just posted|just now|today|active today|posted today)$/.test(lower)) {\n    return new Date().toISOString();\n  }\n  if (/^(yesterday|posted yesterday)$/.test(lower)) {\n    return new Date(Date.now() - 864e5).toISOString();\n  }\n\n  const rel = lower.match(/^(?:posted\\s+|active\\s+)?(\\d+)\\+?\\s*(minute|hour|day|week|month|year)s?\\s+ago$/);\n  if (rel) {\n    const unitMs = { minute: 6e4, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 };\n    return new Date(Date.now() - parseInt(rel[1], 10) * unitMs[rel[2]]).toISOString();\n  }\n\n  const parsed = new Date(raw);\n  return isNaN(parsed.getTime()) ? null : parsed.toISOString();\n}\n\nfunction rowsOf(input) {\n  // The HTTP node hands back either the array itself or a wrapper object.\n  const out = [];\n  for (const item of input) {\n    const j = item.json;\n    if (Array.isArray(j)) out.push(...j);\n    else if (Array.isArray(j.body)) out.push(...j.body);\n    else if (Array.isArray(j.data)) out.push(...j.data);\n    else if (j && typeof j === 'object' && Object.keys(j).length) out.push(j);\n  }\n  return out;\n}\n\nconst rows = rowsOf($input.all());\nif (!rows.length) { console.log('LinkedIn: 0 rows from Apify'); return []; }\n\nconst jobs = [];\nconst seen = new Set();\nfor (const r of rows) {\n  const apply_url = clean(pick(r, ['jobUrl', 'url', 'link', 'applyUrl'], ''));\n  const title     = clean(pick(r, ['title', 'jobTitle', 'position'], ''));\n  if (!apply_url || !title || seen.has(apply_url)) continue;\n  seen.add(apply_url);\n\n  const location = clean(pick(r, ['location', 'jobLocation', 'place'], ''));\n  const raw = (title + ' ' + location + ' ' + clean(pick(r, ['workType', 'workplaceType'], ''))).toLowerCase();\n  let job_type = 'onsite';\n  if (raw.includes('remote')) job_type = 'remote';\n  else if (raw.includes('hybrid')) job_type = 'hybrid';\n\n  jobs.push({\n    title,\n    company:          clean(pick(r, ['companyName', 'company', 'companyTitle'], 'Unknown')),\n    location:         location || 'Not specified',\n    job_type,\n    description:      clean(pick(r, ['description', 'descriptionText', 'jobDescription'], '')).substring(0, 4000),\n    apply_url,\n    salary_text:      clean(pick(r, ['salary', 'salaryInfo', 'compensation'], '')) || null,\n    posted_at_source: toTimestamp(pick(r, ['publishedAt', 'datePosted', 'postedDate', 'postedAt'], null)),\n    source_key:       'apify_linkedin',\n    external_id:      String(pick(r, ['id', 'jobId', 'urn'], apply_url))\n  });\n}\nconsole.log('LinkedIn: ' + jobs.length + ' jobs from ' + rows.length + ' rows');\nreturn jobs.map(j => ({ json: j }));"
+      },
+      "id": "normalize-linkedin",
+      "name": "Normalize LinkedIn",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        440
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Actor outputs are not a stable contract — field names differ between actors\n// and change between builds. Rather than hard-code one shape, take the first\n// key that exists from a list of likely names and log when nothing matches, so\n// a rename shows up as an empty run rather than a silent crash.\nfunction pick(obj, keys, fallback) {\n  for (const k of keys) {\n    const v = k.split('.').reduce((o, part) => (o == null ? o : o[part]), obj);\n    if (v !== undefined && v !== null && v !== '') return v;\n  }\n  return fallback;\n}\nfunction clean(s) {\n  return String(s == null ? '' : s).replace(/\\s+/g, ' ').trim();\n}\n/*\n * Job boards report dates however they like: an ISO string, an epoch number, or\n * — Indeed's default — a relative phrase like \"8 days ago\" or \"Just posted\".\n * `jobs.posted_at_source` is timestamptz, and Postgres rejects anything it\n * cannot parse with a 22007. Because the insert is bulk, one such row fails the\n * ENTIRE batch, so nothing that is not a real timestamp may reach the database.\n */\nfunction toTimestamp(value) {\n  if (value === null || value === undefined) return null;\n\n  if (typeof value === 'number') {\n    const ms = value > 1e12 ? value : value * 1000;   // seconds or milliseconds\n    const d = new Date(ms);\n    return isNaN(d.getTime()) ? null : d.toISOString();\n  }\n\n  const raw = String(value).trim();\n  if (!raw) return null;\n  const lower = raw.toLowerCase();\n\n  if (/^(just posted|just now|today|active today|posted today)$/.test(lower)) {\n    return new Date().toISOString();\n  }\n  if (/^(yesterday|posted yesterday)$/.test(lower)) {\n    return new Date(Date.now() - 864e5).toISOString();\n  }\n\n  const rel = lower.match(/^(?:posted\\s+|active\\s+)?(\\d+)\\+?\\s*(minute|hour|day|week|month|year)s?\\s+ago$/);\n  if (rel) {\n    const unitMs = { minute: 6e4, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 };\n    return new Date(Date.now() - parseInt(rel[1], 10) * unitMs[rel[2]]).toISOString();\n  }\n\n  const parsed = new Date(raw);\n  return isNaN(parsed.getTime()) ? null : parsed.toISOString();\n}\n\nfunction rowsOf(input) {\n  // The HTTP node hands back either the array itself or a wrapper object.\n  const out = [];\n  for (const item of input) {\n    const j = item.json;\n    if (Array.isArray(j)) out.push(...j);\n    else if (Array.isArray(j.body)) out.push(...j.body);\n    else if (Array.isArray(j.data)) out.push(...j.data);\n    else if (j && typeof j === 'object' && Object.keys(j).length) out.push(j);\n  }\n  return out;\n}\n\nconst rows = rowsOf($input.all());\nif (!rows.length) { console.log('Indeed: 0 rows from Apify'); return []; }\n\nconst jobs = [];\nconst seen = new Set();\nfor (const r of rows) {\n  const apply_url = clean(pick(r, ['url', 'jobUrl', 'link', 'externalApplyLink'], ''));\n  const title     = clean(pick(r, ['positionName', 'title', 'jobTitle'], ''));\n  if (!apply_url || !title || seen.has(apply_url)) continue;\n  seen.add(apply_url);\n\n  const location = clean(pick(r, ['location', 'jobLocation'], ''));\n  const raw = (title + ' ' + location + ' ' + clean(pick(r, ['jobType', 'remoteWorkModel'], ''))).toLowerCase();\n  let job_type = 'onsite';\n  if (raw.includes('remote')) job_type = 'remote';\n  else if (raw.includes('hybrid')) job_type = 'hybrid';\n\n  jobs.push({\n    title,\n    company:          clean(pick(r, ['company', 'companyName'], 'Unknown')),\n    location:         location || 'Not specified',\n    job_type,\n    description:      clean(pick(r, ['description', 'descriptionText', 'snippet'], '')).substring(0, 4000),\n    apply_url,\n    salary_text:      clean(pick(r, ['salary', 'salaryText'], '')) || null,\n    posted_at_source: toTimestamp(pick(r, ['postingDateParsed', 'datePublished', 'date', 'postedAt'], null)),\n    source_key:       'apify_indeed',\n    external_id:      String(pick(r, ['id', 'jobKey'], apply_url))\n  });\n}\nconsole.log('Indeed: ' + jobs.length + ' jobs from ' + rows.length + ' rows');\nreturn jobs.map(j => ({ json: j }));"
+      },
+      "id": "normalize-indeed",
+      "name": "Normalize Indeed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        1160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "merge-sources",
+      "name": "Merge Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2880,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One listing often appears on both boards; keep the first and remember the URL\n// list so the next node can ask Supabase which of them we already have.\nconst items = $input.all();\nconst seen = new Set();\nconst unique = [];\nfor (const item of items) {\n  const url = item.json.apply_url;\n  if (url && !seen.has(url)) { seen.add(url); unique.push(item.json); }\n}\nconsole.log('Dedupe: ' + unique.length + ' unique of ' + items.length);\n\n// Both actors can legitimately return nothing (niche query, actor failure).\n// Flow into the \"no new jobs\" response rather than throwing, which would fail\n// the execution and leave the webhook hanging.\nif (unique.length === 0) {\n  return [{ json: { _skip: true, reason: 'No jobs returned by either source', jobs: [], urlListForDbCheck: '', totalCount: 0 } }];\n}\n\nconst urlList = unique.map(j => '\"' + String(j.apply_url).replace(/\"/g, '\\\\\"') + '\"').join(',');\nreturn { json: { jobs: unique, urlListForDbCheck: urlList, totalCount: unique.length } };"
+      },
+      "id": "dedupe-batch",
+      "name": "Dedupe Batch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Extract Preferences').first().json.supabaseUrl }}/rest/v1/jobs?select=apply_url&apply_url=in.({{ $json.urlListForDbCheck }})",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $('Extract Preferences').first().json.supabaseKey, 'Authorization': 'Bearer ' + $('Extract Preferences').first().json.supabaseKey }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "check-existing-in-db",
+      "name": "Check Existing in DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        800
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Drop anything already stored, so the model is never paid to re-score a job.\nconst existingResponse = $input.first().json;\nconst dedupe = $('Dedupe Batch').first().json;\nconst prefs  = $('Extract Preferences').first().json;\nconst allJobs = dedupe.jobs || [];\n\nif (allJobs.length === 0) {\n  return [{ json: { _skip: true, reason: dedupe.reason || 'No jobs found' } }];\n}\n\nlet existing = [];\nif (Array.isArray(existingResponse)) existing = existingResponse;\nelse if (Array.isArray(existingResponse.body)) existing = existingResponse.body;\nelse {\n  for (const key in existingResponse) {\n    if (Array.isArray(existingResponse[key])) { existing = existingResponse[key]; break; }\n  }\n}\n\nconst existingUrls = new Set(existing.map(r => r.apply_url));\nconst newJobs = allJobs.filter(j => !existingUrls.has(j.apply_url));\nconsole.log(allJobs.length + ' scraped, ' + existingUrls.size + ' already stored, ' + newJobs.length + ' new');\n\nif (newJobs.length === 0) {\n  return [{ json: { _skip: true, reason: 'No new jobs' } }];\n}\nreturn [{ json: { _skip: false, jobs: newJobs } }];"
+      },
+      "id": "filter-new-jobs",
+      "name": "Filter New Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json._skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-new-jobs?",
+      "name": "Has New Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"message\": \"No new jobs found\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-no-new-jobs",
+      "name": "Respond No New Jobs",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        980
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1 scored one job per API call. A 60-job run meant 60 requests, 60 round\n// trips, and 60x the per-request prompt overhead. Batching sends ~15 jobs in\n// one prompt and asks for one array back.\nconst prefs = $('Extract Preferences').first().json;\nconst jobs  = $input.first().json.jobs || [];\nconst size  = prefs.scoreBatchSize || 15;\n\nconst batches = [];\nfor (let i = 0; i < jobs.length; i += size) {\n  batches.push({ json: { batchIndex: batches.length, jobs: jobs.slice(i, i + size) } });\n}\nconsole.log('Scoring ' + jobs.length + ' jobs in ' + batches.length + ' batch(es) of up to ' + size);\nreturn batches;"
+      },
+      "id": "batch-for-scoring",
+      "name": "Batch For Scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One node builds the URL, headers and body for whichever provider the user\n// connected, so a single HTTP node can serve all four. Adding a provider means\n// adding a case here — not another branch in the graph.\nconst prefs = $('Extract Preferences').first().json;\nconst batch = $input.item.json;\n\nconst profile = [\n  'Field: ' + prefs.fieldWords,\n  'Target titles: ' + (prefs.jobTitles.length ? prefs.jobTitles.join(', ') : '(any in field)'),\n  'Skills: ' + (prefs.skills.length ? prefs.skills.join(', ') : '(not given)'),\n  'Experience: ' + prefs.experience + ' years (' + prefs.seniority + ')',\n  'Work preference: ' + (prefs.workPreference.join(', ') || 'any'),\n  'Engagement: ' + (prefs.jobType.join(', ') || 'any'),\n  'Location: ' + (prefs.worldwide\n    ? 'Worldwide'\n    : (prefs.countries.map(c => c.name).join(', ') || 'Worldwide'))\n].join('\\n');\n\nconst listing = batch.jobs.map((j, i) => ({\n  i,\n  title: String(j.title || '').substring(0, 200),\n  company: String(j.company || '').substring(0, 120),\n  location: String(j.location || '').substring(0, 120),\n  type: j.job_type,\n  description: String(j.description || '').substring(0, 900)\n}));\n\nconst instruction = 'Score each job against the candidate profile.\\n\\n'\n  + 'CANDIDATE PROFILE:\\n' + profile + '\\n\\n'\n  + 'JOBS (JSON):\\n' + JSON.stringify(listing) + '\\n\\n'\n  + 'Return ONLY a JSON object of the form {\"results\":[...]} with one entry per job:\\n'\n  + '{\"i\": <the job index>, \"score\": <integer 0-100>, \"tech_stack\": [\"lowercase\",\"tech\"],\\n'\n  + ' \"seniority\": \"junior\"|\"mid\"|\"senior\"|\"lead\"|null, \"is_relevant\": <boolean>,\\n'\n  + ' \"match_reason\": \"<max 20 words>\"}\\n\\n'\n  + 'Scoring: 90-100 near-perfect; 70-89 good; 50-69 partial; 30-49 weak; 0-29 poor.\\n'\n  + 'Set is_relevant false only for a completely unrelated field or a recruiter spam post.\\n'\n  + 'Return an entry for every job, in the same order.';\n\nconst system = 'You are a job matching engine. Return only strict JSON. No markdown, no preamble.';\nconst model  = prefs.aiModel;\nconst key    = prefs.aiApiKey;\n\nlet aiUrl, aiHeaders, aiBody;\n\nswitch (prefs.aiProvider) {\n  case 'anthropic':\n    aiUrl = 'https://api.anthropic.com/v1/messages';\n    aiHeaders = { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };\n    // No `temperature` here on purpose: sampling parameters are rejected with a\n    // 400 on current Opus/Sonnet models. Determinism comes from the prompt.\n    // `effort: low` keeps a classification task from paying for deep thinking.\n    aiBody = {\n      model,\n      max_tokens: 4000,\n      system,\n      output_config: { effort: 'low' },\n      messages: [{ role: 'user', content: instruction }]\n    };\n    break;\n\n  case 'openai':\n    aiUrl = 'https://api.openai.com/v1/chat/completions';\n    aiHeaders = { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' };\n    aiBody = {\n      model, temperature: 0, max_tokens: 4000,\n      response_format: { type: 'json_object' },\n      messages: [{ role: 'system', content: system }, { role: 'user', content: instruction }]\n    };\n    break;\n\n  case 'gemini':\n    aiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent';\n    aiHeaders = { 'x-goog-api-key': key, 'Content-Type': 'application/json' };\n    aiBody = {\n      systemInstruction: { parts: [{ text: system }] },\n      contents: [{ role: 'user', parts: [{ text: instruction }] }],\n      generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 4000 }\n    };\n    break;\n\n  case 'groq':\n  default:\n    aiUrl = 'https://api.groq.com/openai/v1/chat/completions';\n    aiHeaders = { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' };\n    aiBody = {\n      model, temperature: 0, max_tokens: 4000,\n      response_format: { type: 'json_object' },\n      messages: [{ role: 'system', content: system }, { role: 'user', content: instruction }]\n    };\n    break;\n}\n\nreturn { json: { batchIndex: batch.batchIndex, jobs: batch.jobs, aiUrl, aiHeaders, aiBody } };"
+      },
+      "id": "build-scoring-request",
+      "name": "Build Scoring Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.aiUrl }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($json.aiHeaders) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.aiBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          }
+        }
+      },
+      "id": "score-batch-ai",
+      "name": "Score Batch (AI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4560,
+        800
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One parser for all four providers: pull the text payload out of whichever\n// envelope came back, then read the same JSON contract from it.\nconst response = $input.item.json;\nconst request  = $('Build Scoring Request').item.json;\nconst prefs    = $('Extract Preferences').first().json;\nconst jobs     = request.jobs || [];\n\nfunction extractText(r) {\n  // Anthropic\n  if (Array.isArray(r.content)) {\n    return r.content.filter(b => b && b.type === 'text').map(b => b.text).join('');\n  }\n  // OpenAI / Groq\n  if (r.choices && r.choices[0]) {\n    return r.choices[0].message ? r.choices[0].message.content : r.choices[0].text;\n  }\n  // Gemini\n  if (Array.isArray(r.candidates) && r.candidates[0]) {\n    const parts = r.candidates[0].content && r.candidates[0].content.parts;\n    if (Array.isArray(parts)) return parts.map(p => p.text || '').join('');\n  }\n  return '';\n}\n\nlet results = [];\nconst text = extractText(response) || '';\n\nif (!text) {\n  console.log('Scoring failed for batch ' + request.batchIndex + ': ' + JSON.stringify(response).substring(0, 300));\n} else {\n  try {\n    let parsed;\n    try { parsed = JSON.parse(text); }\n    catch (e) {\n      // Some models still wrap JSON in prose or a code fence.\n      const m = text.match(/\\{[\\s\\S]*\\}/);\n      if (m) parsed = JSON.parse(m[0]);\n    }\n    if (parsed) results = parsed.results || parsed.jobs || (Array.isArray(parsed) ? parsed : []);\n  } catch (e) {\n    console.log('Parse error on batch ' + request.batchIndex + ': ' + e.message);\n  }\n}\n\nconst byIndex = new Map();\nfor (const r of results) {\n  if (r && typeof r.i === 'number') byIndex.set(r.i, r);\n}\n\n// A scoring failure must not lose the job. Anything unscored is kept at a\n// neutral 50 and flagged, so the run still produces matches.\nreturn jobs.map((job, i) => {\n  const r = byIndex.get(i) || {};\n  const scored = byIndex.has(i);\n  return { json: {\n    ...job,\n    tech_stack:  Array.isArray(r.tech_stack) ? r.tech_stack.map(t => String(t).toLowerCase()).slice(0, 8) : [],\n    seniority:   ['junior', 'mid', 'senior', 'lead'].includes(r.seniority) ? r.seniority : null,\n    is_relevant: r.is_relevant !== false,\n    score:       typeof r.score === 'number' ? Math.min(100, Math.max(0, Math.round(r.score))) : 50,\n    match_reason: r.match_reason || (scored ? '' : 'Not scored — provider error'),\n    userId: prefs.userId\n  } };\n});"
+      },
+      "id": "parse-ai-scores",
+      "name": "Parse AI Scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4800,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v1 inserted one row per HTTP request. Everything relevant goes in one bulk\n// POST instead, so a 60-job run is 1 request rather than 60.\nconst prefs = $('Extract Preferences').first().json;\nconst items = $input.all().map(i => i.json).filter(j => j.is_relevant !== false);\n\nif (items.length === 0) {\n  return [{ json: { _empty: true, rows: [], scored: [] } }];\n}\n\n// source_key → sources.id, matching the seed rows in supabase/schema.sql.\nconst SOURCE_IDS = { apify_linkedin: 4, apify_indeed: 5 };\n\n/*\n * Final guard on the typed column. The normalizers already parse dates, but this\n * is the last hop before Postgres and the insert is all-or-nothing — a single\n * unparseable value here would fail every job in the batch, not just its own.\n */\nfunction safeTimestamp(v) {\n  if (!v) return null;\n  const d = new Date(v);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n}\n\nconst rows = items.map(j => ({\n  title: j.title,\n  company: j.company,\n  location: j.location,\n  job_type: j.job_type,\n  description: j.description,\n  apply_url: j.apply_url,\n  salary_text: j.salary_text,\n  posted_at_source: safeTimestamp(j.posted_at_source),\n  tech_stack: j.tech_stack,\n  seniority: j.seniority,\n  is_relevant: j.is_relevant,\n  source_id: SOURCE_IDS[j.source_key] || null,\n  external_id: j.external_id\n}));\n\nconsole.log('Inserting ' + rows.length + ' relevant jobs of ' + $input.all().length + ' scored');\nreturn [{ json: { _empty: false, rows, scored: items, supabaseUrl: prefs.supabaseUrl, supabaseKey: prefs.supabaseKey, userId: prefs.userId } }];"
+      },
+      "id": "collect-for-insert",
+      "name": "Collect For Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5040,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.supabaseUrl }}/rest/v1/jobs?on_conflict=apply_url",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $json.supabaseKey, 'Authorization': 'Bearer ' + $json.supabaseKey, 'Content-Type': 'application/json', 'Prefer': 'return=representation,resolution=merge-duplicates' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rows) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "insert-jobs-bulk",
+      "name": "Insert Jobs (bulk)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5280,
+        800
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Join the inserted job ids back to their scores by apply_url — Postgres does\n// not guarantee the returned order matches the order sent.\nconst inserted = $input.first().json;\nconst src = $('Collect For Insert').first().json;\n\nlet rows = [];\nif (Array.isArray(inserted)) rows = inserted;\nelse if (Array.isArray(inserted.body)) rows = inserted.body;\n\nif (!rows.length) {\n  console.log('No rows returned from insert — nothing to match. Response: ' + JSON.stringify(inserted).substring(0, 300));\n  return [{ json: { _empty: true, matches: [] } }];\n}\n\nconst scoreByUrl = new Map(src.scored.map(j => [j.apply_url, j.score]));\nconst matches = rows\n  .filter(r => r.id && scoreByUrl.has(r.apply_url))\n  .map(r => ({ user_id: src.userId, job_id: r.id, score: scoreByUrl.get(r.apply_url) }));\n\nconsole.log('Upserting ' + matches.length + ' user/job matches');\nreturn [{ json: { _empty: matches.length === 0, matches, supabaseUrl: src.supabaseUrl, supabaseKey: src.supabaseKey, count: matches.length } }];"
+      },
+      "id": "build-match-rows",
+      "name": "Build Match Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5520,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.supabaseUrl }}/rest/v1/user_job_matches?on_conflict=user_id,job_id",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $json.supabaseKey, 'Authorization': 'Bearer ' + $json.supabaseKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal,resolution=merge-duplicates' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.matches) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "upsert-matches-bulk",
+      "name": "Upsert Matches (bulk)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5760,
+        800
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: \"Job search complete\", matched: $('Build Match Rows').first().json.count || 0 }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        6000,
+        800
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Config": {
+      "main": [
+        [
+          {
+            "node": "Validate Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Secret": {
+      "main": [
+        [
+          {
+            "node": "Extract Preferences",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Preferences": {
+      "main": [
+        [
+          {
+            "node": "Build Apify Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Apify Inputs": {
+      "main": [
+        [
+          {
+            "node": "Scrape Free Sources",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Use Apify?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Apify?": {
+      "main": [
+        [
+          {
+            "node": "Apify - LinkedIn Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Apify - Indeed Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Free Sources": {
+      "main": [
+        [
+          {
+            "node": "Normalize Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Scraper": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - LinkedIn Jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - Indeed Jobs": {
+      "main": [
+        [
+          {
+            "node": "Normalize Indeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Normalize Indeed": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Sources": {
+      "main": [
+        [
+          {
+            "node": "Dedupe Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe Batch": {
+      "main": [
+        [
+          {
+            "node": "Check Existing in DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing in DB": {
+      "main": [
+        [
+          {
+            "node": "Filter New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Has New Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Batch For Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond No New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch For Scoring": {
+      "main": [
+        [
+          {
+            "node": "Build Scoring Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Scoring Request": {
+      "main": [
+        [
+          {
+            "node": "Score Batch (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Batch (AI)": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Scores": {
+      "main": [
+        [
+          {
+            "node": "Collect For Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect For Insert": {
+      "main": [
+        [
+          {
+            "node": "Insert Jobs (bulk)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Jobs (bulk)": {
+      "main": [
+        [
+          {
+            "node": "Build Match Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Match Rows": {
+      "main": [
+        [
+          {
+            "node": "Upsert Matches (bulk)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Matches (bulk)": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Jobak"
+    }
+  ]
+}

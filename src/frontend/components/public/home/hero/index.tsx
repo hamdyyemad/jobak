@@ -7,7 +7,7 @@ import {
   HeroCTA 
 } from "./hero-content";
 
-export function HeroSection() {
+export function HeroSection({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   return (
     <section className="relative min-h-screen flex flex-col justify-center overflow-hidden">
       <AnimatedBackground enableGrid={false} enableSphere={true}>
@@ -16,7 +16,7 @@ export function HeroSection() {
           <HeroHeadline />
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-24 items-end">
             <HeroDescription />
-            <HeroCTA />
+            <HeroCTA isAuthenticated={isAuthenticated} />
           </div>
         </div>
         <div className="pt-16">

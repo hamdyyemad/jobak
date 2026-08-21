@@ -1,0 +1,22 @@
+{
+  "name": "Jobak — AI Job Matching Platform",
+  "short_name": "Jobak",
+  "description": "Find your perfect job with AI-powered recommendations",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#58E68C",
+  "background_color": "#08090a",
+  "display": "standalone",
+  "start_url": "/",
+  "orientation": "portrait-primary"
+}

@@ -9,7 +9,7 @@ export const steps: Step[] = [
   {
     number: "I",
     title: "Tell us what you want",
-    description: "Complete a 6-step onboarding: pick remote vs on-site, your location, field, skills, job type, and salary range.",
+    description: "Complete a 5-step onboarding: pick remote vs on-site, the countries you'll work in, your field, your skills, and the roles you're targeting.",
     code: `{
   workPreference: "remote",
   field: "Software Engineering",
@@ -22,31 +22,30 @@ export const steps: Step[] = [
   },
   {
     number: "II",
-    title: "AI scrapes & ranks",
-    description: "Our n8n workflow hits LinkedIn, Indeed, RemoteOK, Wuzzuf and more — then Grok AI scores every listing against your profile.",
-    code: `// Scraping 6 sources in parallel...
-✓ LinkedIn Jobs        → 142 results
-✓ Indeed              → 87 results
-✓ RemoteOK            → 34 results
-✓ Wuzzuf              → 61 results
+    title: "AI searches & ranks",
+    description: "Our n8n workflow searches job platforms for openings that fit your profile — then Groq AI scores every listing against it.",
+    code: `// Searching job platforms...
+✓ Collecting open roles
+✓ Removing duplicates
+✓ Matching against your profile
 
 // AI ranking by relevance...
-✓ 324 jobs scored (0–100)
-✓ Top 20 ready for review`,
+✓ Every listing scored (0–100)
+✓ Best matches ready for review`,
   },
   {
     number: "III",
     title: "Review your matches",
-    description: "Browse AI-ranked jobs on your dashboard. Filter by score, salary, or source. Bookmark favorites and apply in one click.",
+    description: "Browse AI-ranked jobs on your dashboard. Filter by score, salary, or job type. Bookmark favorites and apply in one click.",
     code: `// Your top matches
 [
   { title: "Frontend Engineer",
-    company: "Stripe",  score: 96,
+    company: "Acme Corp", score: 96,
     location: "Remote", salary: "$85k" },
   { title: "React Developer",
-    company: "Linear",  score: 91,
+    company: "Northwind", score: 91,
     location: "Remote", salary: "$80k" },
-  ...18 more matches
+  ...more matches
 ]`,
   },
 ];

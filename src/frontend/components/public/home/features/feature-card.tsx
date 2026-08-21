@@ -61,10 +61,17 @@ interface FeatureVisualProps {
 }
 
 function FeatureVisual({ type }: FeatureVisualProps) {
+  // The visuals drive themselves with SMIL, which keeps ticking off-screen.
+  // Mount them only while in view — the box is fixed-size, so nothing shifts.
+  const { ref, isVisible } = useIntersectionVisible<HTMLDivElement>({
+    rootMargin: "200px",
+    triggerOnce: false,
+  });
+
   return (
     <div className="flex justify-center lg:justify-end">
-      <div className="w-48 h-40 text-foreground">
-        <AnimatedVisual type={type} />
+      <div ref={ref} className="w-48 h-40 text-foreground">
+        {isVisible && <AnimatedVisual type={type} />}
       </div>
     </div>
   );
