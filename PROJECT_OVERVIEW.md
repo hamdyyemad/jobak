@@ -853,7 +853,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 # n8n
-N8N_WEBHOOK_URL=your_n8n_webhook_url
+N8N_MATCH_WEBHOOK_URL=your_n8n_match_webhook_url
+N8N_APIFY_WEBHOOK_URL=your_n8n_apify_webhook_url
 N8N_WEBHOOK_SECRET=your_webhook_secret
 
 # AI APIs

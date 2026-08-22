@@ -184,8 +184,8 @@ and throttles to 12 checks/minute.
 
 ## Apify + workflow v2 (added 2026-08-21)
 
-Onboarding now requires an Apify token alongside at least one AI model key, and
-`n8n/jobak-job-search-v2.json` replaces the raw-HTTP scraper with Apify actors.
+Onboarding takes at least one AI model key; an Apify token is optional and only
+ever spent when the user presses Search on the dashboard.
 
 - [ ] **Run the Apify migration** at the bottom of `supabase/schema.sql`. It adds
       `user_preferences.apify_key_encrypted`, seeds sources 4 and 5, and adds a
@@ -230,8 +230,8 @@ Onboarding now requires an Apify token alongside at least one AI model key, and
 
 Collection and matching are now separate. `jobs` is a shared pool that scheduled
 collectors fill for everyone; `user_job_matches` is the per-user scored subset
-the dashboard reads. Three workflows in `n8n/`, replacing the single
-`jobak-job-search-v2.json`.
+the dashboard reads. Four workflows in `n8n/`, replacing the single
+`jobak-job-search-v2.json`, which has been deleted.
 
 - [ ] **Run the SQL, in this order.** `supabase/schema.sql` was only partly
       applied to the live database, which is where the `country_code`,
@@ -261,9 +261,11 @@ the dashboard reads. Three workflows in `n8n/`, replacing the single
       yet in the pool sees nothing until the next collection run. Either trigger
       an immediate collect on their terms at onboarding, or say plainly in the UI
       that first results arrive within a few hours.
-- [ ] **Retire `jobak-job-search-v2.json`** once the three are running. It does
-      collection and matching in one pass per user, which is the thing this
-      architecture replaces.
+- [x] **Retire `jobak-job-search-v2.json`.** Done — both copies deleted. It did
+      collection and matching in one pass per user, spending Apify credit at
+      onboarding, which is the thing this architecture replaces. Onboarding now
+      triggers the matcher via `N8N_MATCH_WEBHOOK_URL`; `N8N_WEBHOOK_URL` is
+      retired, so delete it from Vercel too.
 - [ ] **Watch `collection_runs`.** `ok = false` rows, or a `found` that drops to
       zero for a source that used to return, is how a broken adapter surfaces.
       There is no alerting on it yet.
