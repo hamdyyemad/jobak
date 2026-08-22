@@ -8,6 +8,9 @@ import type { KeyCheck } from "@/frontend/hooks/protected/onboarding";
 import { inputClass, labelClass } from "./styles";
 
 interface StepApiKeyProps {
+  /** Providers with a key already stored — names only, never the key. */
+  savedProviders: AiProvider[];
+  hasSavedApifyKey: boolean;
   aiProviders: AiProvider[];
   aiKeys: Partial<Record<AiProvider, string>>;
   apifyKey: string;
@@ -108,6 +111,8 @@ function KeyRow({
 }
 
 export function StepApiKey({
+  savedProviders,
+  hasSavedApifyKey,
   aiProviders,
   aiKeys,
   apifyKey,
@@ -132,8 +137,25 @@ export function StepApiKey({
 
   const verifiedAiCount = aiProviders.filter((p) => statusOf(p).status === "valid").length;
 
+  const onFile = [
+    ...savedProviders.map(
+      (p) => aiProviderOptions.find((o) => o.value === p)?.label ?? p
+    ),
+    ...(hasSavedApifyKey ? [apifyOption.label] : []),
+  ];
+
   return (
     <div className="space-y-10">
+      {/*
+        Only shown when editing. The stored key is never sent to the browser, so
+        the field cannot be prefilled — this says so plainly rather than looking
+        like the key was lost.
+      */}
+      {onFile.length > 0 && (
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg-quaternary">
+          On file: {onFile.join(" · ")} — leave blank to keep
+        </p>
+      )}
       {/* ── Optional: extra coverage on top of the free sources ── */}
       <section className="space-y-4">
         <div className="flex items-baseline gap-3">

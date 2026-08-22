@@ -42,7 +42,24 @@ export async function POST(request: NextRequest) {
       ([provider, key]) => isAiProvider(provider) && typeof key === "string" && key.trim()
     ) as [AiProvider, string][];
 
-    if (keyEntries.length === 0) {
+    /*
+     * Existing credentials, because this endpoint is also Settings.
+     *
+     * A blank key field means "keep what is stored", not "clear it" — the
+     * stored value is encrypted and never sent to the browser, so the form
+     * cannot prefill it and a re-save would otherwise wipe it.
+     */
+    const service = createServiceClient();
+    const { data: existing } = await service
+      .from("user_preferences")
+      .select("ai_keys_encrypted, apify_key_encrypted")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const storedKeys = (existing?.ai_keys_encrypted ?? {}) as Partial<Record<AiProvider, string>>;
+    const storedApifyKey: string | null = existing?.apify_key_encrypted ?? null;
+
+    if (keyEntries.length === 0 && Object.keys(storedKeys).length === 0) {
       return NextResponse.json(
         { error: "At least one AI provider key is required" },
         { status: 400 }
@@ -66,11 +83,24 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 3. Encrypt every key + persist preferences ────────────
-    const encryptedKeys: Partial<Record<AiProvider, string>> = {};
+    // Newly typed keys win; anything left blank keeps the stored value.
+    const encryptedKeys: Partial<Record<AiProvider, string>> = { ...storedKeys };
     for (const [provider, key] of keyEntries) {
       encryptedKeys[provider] = await encryptApiKey(key.trim());
     }
-    const encryptedApifyKey = apifyKey ? await encryptApiKey(apifyKey) : null;
+
+    /*
+     * Deselecting a provider drops its key. Keeping it would leave a credential
+     * on file for something the user has said they no longer want used.
+     */
+    const selected = new Set(
+      body.aiProviders && Array.isArray(body.aiProviders) ? body.aiProviders : Object.keys(encryptedKeys)
+    );
+    for (const provider of Object.keys(encryptedKeys) as AiProvider[]) {
+      if (!selected.has(provider)) delete encryptedKeys[provider];
+    }
+
+    const encryptedApifyKey = apifyKey ? await encryptApiKey(apifyKey) : storedApifyKey;
 
     /*
      * `countries` is a list now. A single-country payload from an older client
@@ -99,7 +129,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const service = createServiceClient();
     const { error: upsertError } = await service
       .from("user_preferences")
       .upsert(
@@ -113,7 +142,7 @@ export async function POST(request: NextRequest) {
           job_types: body.jobType ?? [],
           job_titles: body.jobTitles ?? [],
           seniority: body.seniority ?? "mid",
-          ai_providers: keyEntries.map(([provider]) => provider),
+          ai_providers: Object.keys(encryptedKeys),
           ai_keys_encrypted: encryptedKeys,
           apify_key_encrypted: encryptedApifyKey,
           // Kept in step with ai_keys_encrypted so anything still reading the
@@ -156,12 +185,23 @@ export async function POST(request: NextRequest) {
 
     const requestId: string | null = queued?.id ?? null;
 
-    // ── 5. Forward to n8n with webhook secret ─────────────────
-    const n8nUrl = process.env.N8N_WEBHOOK_URL;
+    /*
+     * ── 5. Forward to n8n with webhook secret ─────────────────
+     *
+     * The matcher, not a collector. This used to call a monolithic workflow
+     * that scraped, spent the user's Apify credit and scored, all per user —
+     * which is precisely what the split into public/private/on-demand
+     * collectors replaced.
+     *
+     * So onboarding now only asks for scoring: the shared pool already holds
+     * results to show immediately, and the private collector picks up this
+     * user's new titles on its next run.
+     */
+    const n8nUrl = process.env.N8N_MATCH_WEBHOOK_URL;
     const n8nSecret = process.env.N8N_WEBHOOK_SECRET;
 
     if (!n8nUrl) {
-      logServerError("webhook/job-search", new Error("N8N_WEBHOOK_URL is not configured"));
+      logServerError("webhook/job-search", new Error("N8N_MATCH_WEBHOOK_URL is not configured"));
       return NextResponse.json({
         success: true,
         queued: true,
@@ -182,7 +222,16 @@ export async function POST(request: NextRequest) {
       seniority: body.seniority ?? "mid",
       // Plaintext keys go to n8n so it can call the provider — n8n is server-side
       // only. The first provider picked is the one the workflow should prefer.
-      aiProvider: keyEntries[0][0],
+      /*
+       * Falls back to a provider that is on file but was not retyped. Saving
+       * from Settings without touching the key fields leaves `keyEntries`
+       * empty, and indexing it directly threw.
+       *
+       * Only freshly typed keys can be forwarded in plaintext — the stored ones
+       * are encrypted, and decrypting them to hand to a workflow is exactly what
+       * `/internal/match-candidates` exists to avoid.
+       */
+      aiProvider: keyEntries[0]?.[0] ?? (Object.keys(encryptedKeys)[0] as AiProvider | undefined) ?? null,
       aiKeys: Object.fromEntries(keyEntries),
       apifyKey,
       groqApiKey: submittedKeys.groq ?? "",

@@ -45,20 +45,26 @@ export async function middleware(request: NextRequest) {
 
   const isDashboard = pathname.startsWith("/dashboard");
   const isOnboarding = pathname.startsWith("/onboarding");
+  const isSettings = pathname.startsWith("/settings");
   const isAuth =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/forgot-password");
 
   // Unauthenticated user trying to reach a protected page → send to login
-  if ((isDashboard || isOnboarding) && !user) {
+  if ((isDashboard || isOnboarding || isSettings) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
+  /*
+   * Settings edits answers that onboarding collects, so there has to be a set of
+   * them first. Grouped with the dashboard rather than given its own check —
+   * both mean "past the front door", and both belong behind a finished profile.
+   */
   // Authenticated user on dashboard but hasn't completed onboarding → redirect to onboarding
-  if (isDashboard && user) {
+  if ((isDashboard || isSettings) && user) {
     const { data: prefs } = await supabase
       .from("user_preferences")
       .select("onboarding_completed")
