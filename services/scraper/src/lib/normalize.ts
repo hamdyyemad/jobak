@@ -1,7 +1,4 @@
-import type { ScrapedJob } from "./types.js";
-
-export const UA =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+import type { ScrapedJob } from "../core/types.js";
 
 /** Reads the first key that holds something, including dotted paths. */
 export function pick<T = unknown>(obj: unknown, keys: string[], fallback: T): T {
@@ -137,16 +134,50 @@ export function dedupe(jobs: ScrapedJob[]): ScrapedJob[] {
     return out;
 }
 
-/** Shared fetch with a caller-controlled abort and a browser-ish User-Agent. */
-export async function fetchText(url: string, signal: AbortSignal, headers: Record<string, string> = {}) {
-    const res = await fetch(url, {
-        signal,
-        headers: { "User-Agent": UA, Accept: "*/*", "Accept-Language": "en-US,en;q=0.9", ...headers },
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.text();
+/**
+ * Arabic text, folded so two spellings of the same word compare equal.
+ *
+ * Arabic job boards are inconsistent about the alef hamza forms (أ إ آ vs ا),
+ * the taa marbuta (ة vs ه) and the decorative tatweel (ـ), so "مطوّر واجهات"
+ * and "مطور واجهات" are the same title spelled two ways. Diacritics are
+ * stripped for the same reason.
+ */
+export function foldArabic(input: string): string {
+    return input
+        .replace(/[\u0640]/g, "")                 // tatweel
+        .replace(/[\u064B-\u065F\u0670]/g, "")    // harakat
+        .replace(/[\u0622\u0623\u0625\u0671]/g, "\u0627")  // آ أ إ ٱ → ا
+        .replace(/\u0649/g, "\u064A")             // ى → ي
+        .replace(/\u0629/g, "\u0647");            // ة → ه
 }
 
-export async function fetchJson<T>(url: string, signal: AbortSignal, headers: Record<string, string> = {}) {
-    return JSON.parse(await fetchText(url, signal, headers)) as T;
+/** True when the text is predominantly Arabic script. */
+export function isArabic(input: string): boolean {
+    const text = String(input ?? "");
+    if (!text) return false;
+    const arabic = text.match(/[\u0600-\u06FF]/g)?.length ?? 0;
+    const latin = text.match(/[A-Za-z]/g)?.length ?? 0;
+    return arabic > latin;
+}
+
+/**
+ * The comparison form for any free text this service matches on.
+ *
+ * One function so a query and the text it is matched against are always folded
+ * the same way — matching a raw query against a folded haystack silently never
+ * hits, which is the sort of bug that reads as "the source returned nothing".
+ */
+export function foldForMatch(input: unknown): string {
+    return foldArabic(clean(input).toLowerCase());
+}
+
+/** The registrable domain, lowercased and without `www.`; "" if unparseable. */
+export function hostOf(url: unknown): string {
+    const raw = clean(url);
+    if (!raw) return "";
+    try {
+        return new URL(raw).hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+        return "";
+    }
 }
