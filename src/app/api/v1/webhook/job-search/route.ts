@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
 import { encryptApiKey } from "@/backend/lib/crypto/api-key";
@@ -133,15 +133,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 4. Forward to n8n with webhook secret ─────────────────
+    /*
+     * ── 4. Queue the search, then answer ──────────────────────
+     *
+     * Collecting takes minutes, and the user used to sit on a spinner for all
+     * of them. The request is recorded first so it survives an n8n that is slow
+     * or down, the browser is answered straight away, and the trigger goes out
+     * afterwards — see the `after` block below.
+     */
+    const { data: queued, error: queueError } = await service
+      .from("search_requests")
+      .insert({ user_id: user.id, kind: "onboarding", status: "queued" })
+      .select("id")
+      .single();
+
+    if (queueError) {
+      // Preferences are already saved, so this is not fatal: the hourly
+      // collector will cover these titles regardless. Log it and carry on
+      // rather than telling the user their onboarding failed.
+      logServerError("webhook/job-search:queue", queueError);
+    }
+
+    const requestId: string | null = queued?.id ?? null;
+
+    // ── 5. Forward to n8n with webhook secret ─────────────────
     const n8nUrl = process.env.N8N_WEBHOOK_URL;
     const n8nSecret = process.env.N8N_WEBHOOK_SECRET;
 
     if (!n8nUrl) {
-      return NextResponse.json(
-        { error: "N8N_WEBHOOK_URL not configured" },
-        { status: 500 }
-      );
+      logServerError("webhook/job-search", new Error("N8N_WEBHOOK_URL is not configured"));
+      return NextResponse.json({
+        success: true,
+        queued: true,
+        requestId,
+        message: "Preferences saved. Your first search will run shortly.",
+      });
     }
 
     const payload = {
@@ -163,29 +189,61 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     };
 
-    const n8nResponse = await fetch(n8nUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(n8nSecret ? { "X-Webhook-Secret": n8nSecret } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
+    /*
+     * Runs once the response is already on its way to the browser, so the user
+     * moves on to the marketing step while the collector is still starting up.
+     *
+     * The status write is the point: whatever happens to the trigger is on the
+     * row, so "did my search actually start" has an answer that does not
+     * involve opening n8n.
+     */
+    after(async () => {
+      const mark = async (status: "running" | "failed", detail?: string) => {
+        if (!requestId) return;
+        await service
+          .from("search_requests")
+          .update({
+            status,
+            detail: detail?.slice(0, 400) ?? null,
+            ...(status === "running"
+              ? { started_at: new Date().toISOString() }
+              : { finished_at: new Date().toISOString() }),
+          })
+          .eq("id", requestId);
+      };
 
-    if (!n8nResponse.ok) {
-      const text = await n8nResponse.text().catch(() => "");
-      console.error("n8n webhook error:", n8nResponse.status, text);
-      // Return success to user anyway — preferences are saved; n8n can be retried
-      return NextResponse.json({
-        success: true,
-        message: "Preferences saved. Job search will run shortly.",
-        n8nWarning: "Workflow trigger failed — it will be retried.",
-      });
-    }
+      try {
+        const n8nResponse = await fetch(n8nUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(n8nSecret ? { "X-Webhook-Secret": n8nSecret } : {}),
+          },
+          body: JSON.stringify({ ...payload, requestId }),
+        });
+
+        if (!n8nResponse.ok) {
+          const text = await n8nResponse.text().catch(() => "");
+          logServerError(
+            "webhook/job-search:n8n",
+            new Error(`n8n responded ${n8nResponse.status}`)
+          );
+          await mark("failed", `n8n responded ${n8nResponse.status}: ${text}`);
+          return;
+        }
+
+        await mark("running");
+      } catch (triggerError) {
+        logServerError("webhook/job-search:trigger", triggerError);
+        await mark("failed", "Could not reach the workflow.");
+      }
+    });
 
     return NextResponse.json({
       success: true,
-      message: "Onboarding complete. Job search started.",
+      queued: true,
+      requestId,
+      message: "Your first search is running. This usually takes a few minutes.",
     });
   } catch (error) {
     // Never echo the raw message back — it exposes hostnames and internals.

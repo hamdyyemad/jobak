@@ -5,6 +5,8 @@ interface OnboardingNavigationProps {
   totalSteps: number;
   isFirstStep: boolean;
   isLastStep: boolean;
+  /** Step 5 — the action that queues the search, not the end of the flow. */
+  isSubmitStep: boolean;
   isSubmitting: boolean;
   /** Blocks the final action until at least one AI key has been verified. */
   canSubmit: boolean;
@@ -12,6 +14,8 @@ interface OnboardingNavigationProps {
   onBack: () => void;
   onNext: () => void;
   onSubmit: () => void;
+  /** Step 6 — save the marketing answers and leave for the dashboard. */
+  onFinish: () => void;
 }
 
 /**
@@ -26,12 +30,14 @@ export function OnboardingNavigation({
   totalSteps,
   isFirstStep,
   isLastStep,
+  isSubmitStep,
   isSubmitting,
   canSubmit,
   submitHint,
   onBack,
   onNext,
   onSubmit,
+  onFinish,
 }: OnboardingNavigationProps) {
   return (
     <footer className="relative z-10 border-t border-border-subtle">
@@ -39,9 +45,9 @@ export function OnboardingNavigation({
         <button
           type="button"
           onClick={onBack}
-          disabled={isFirstStep}
+          disabled={isFirstStep || isLastStep}
           className={`flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] transition-colors ${
-            isFirstStep
+            isFirstStep || isLastStep
               ? "cursor-not-allowed text-(--fg-quaternary)/40"
               : "text-(--fg-tertiary) hover:text-(--fg-primary)"
           }`}
@@ -69,13 +75,22 @@ export function OnboardingNavigation({
         </div>
 
         <div className="flex items-center gap-4">
-          {isLastStep && !canSubmit && submitHint && (
+          {isSubmitStep && !canSubmit && submitHint && (
             <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-fg-quaternary sm:block">
               {submitHint}
             </span>
           )}
 
           {isLastStep ? (
+            <button
+              type="button"
+              onClick={onFinish}
+              className="flex items-center gap-2.5 border border-(--sc-a) bg-(--sc-a)/12 px-6 py-3 font-mono text-[11px] uppercase tracking-[0.22em] text-(--fg-primary) transition-all hover:bg-(--sc-a)/22"
+            >
+              Go to dashboard
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          ) : isSubmitStep ? (
             <button
               type="button"
               onClick={onSubmit}

@@ -5,11 +5,12 @@ import { Pencil, X } from "lucide-react";
 import { jobTypeOptions, seniorityOptions, seniorityFromExperience } from "./data";
 import { JobType, Seniority, OnboardingData } from "@/frontend/types/on-boarding";
 import { Select } from "@/frontend/components/shared/select";
-import { titlesForField } from "@/frontend/lib/configs/job-titles";
+import { titlesForField, type JobField } from "@/frontend/lib/configs/job-titles";
 import { OptionRow } from "./option-row";
 import { labelClass } from "./styles";
 
 interface StepJobPreferencesProps {
+  catalogue: JobField[];
   jobType: JobType[];
   jobTitles: string[];
   seniority: Seniority | null;
@@ -19,6 +20,7 @@ interface StepJobPreferencesProps {
 }
 
 export function StepJobPreferences({
+  catalogue,
   jobType,
   jobTitles,
   seniority,
@@ -34,10 +36,10 @@ export function StepJobPreferences({
   /** Titles already chosen drop out of the list — picking one twice is a no-op. */
   const titleOptions = useMemo(
     () =>
-      titlesForField(field)
+      titlesForField(catalogue, field)
         .filter((title) => !jobTitles.includes(title))
         .map((title) => ({ value: title, label: title })),
-    [field, jobTitles]
+    [catalogue, field, jobTitles]
   );
 
   const handleJobTypeToggle = (type: JobType) => {
