@@ -1,4 +1,5 @@
 import { getJobCatalogue } from "@/backend/lib/job-catalogue";
+import { getOnboardingProfile } from "@/backend/lib/onboarding-profile";
 import { OnboardingClient } from "@/frontend/components/protected/onboarding/onboarding-client";
 
 /**
@@ -9,6 +10,9 @@ import { OnboardingClient } from "@/frontend/components/protected/onboarding/onb
  * from the browser instead would mean the first two steps render before their
  * own options exist.
  *
+ * It doubles as the Settings screen: an existing profile is loaded and the flow
+ * opens prefilled, so changing one answer does not mean re-entering all of them.
+ *
  * Dynamic on purpose. Left to itself this page prerenders, which bakes the
  * catalogue into the build — a title added to the table would not appear until
  * the next deploy, and a build run before the tables exist would ship an empty
@@ -18,7 +22,7 @@ import { OnboardingClient } from "@/frontend/components/protected/onboarding/onb
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
-  const catalogue = await getJobCatalogue();
+  const [catalogue, profile] = await Promise.all([getJobCatalogue(), getOnboardingProfile()]);
 
-  return <OnboardingClient catalogue={catalogue} />;
+  return <OnboardingClient catalogue={catalogue} profile={profile} />;
 }

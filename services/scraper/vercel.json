@@ -4,6 +4,10 @@
     "api/scrape.ts": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "api/enrich.ts": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }

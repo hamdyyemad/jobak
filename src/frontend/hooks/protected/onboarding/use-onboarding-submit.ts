@@ -69,9 +69,10 @@ export function useOnboardingSubmit() {
    * running, so nothing about a missing attribution answer should keep them off
    * their dashboard.
    */
-  const handleFinish = async (answers: MarketingAnswers) => {
+  const handleFinish = async (answers: MarketingAnswers | null) => {
     const answered =
-      answers.heardFrom || answers.goal || answers.searchStatus || answers.heardDetail;
+      answers &&
+      (answers.heardFrom || answers.goal || answers.searchStatus || answers.heardDetail);
 
     if (answered) {
       try {

@@ -10,6 +10,7 @@ import {
   useMarketingAnswers,
 } from "@/frontend/hooks/protected/onboarding";
 import type { JobField } from "@/frontend/lib/configs/job-titles";
+import type { OnboardingProfile } from "@/backend/lib/onboarding-profile";
 import { fieldLabel } from "@/frontend/lib/configs/job-titles";
 import {
   OnboardingHeader,
@@ -37,10 +38,19 @@ const TRAVEL = 24;
 interface OnboardingClientProps {
   /** Read from `job_fields` / `job_titles` by the server component above. */
   catalogue: JobField[];
+  /** The saved profile when this is Settings; null on first onboarding. */
+  profile: OnboardingProfile | null;
 }
 
-export function OnboardingClient({ catalogue }: OnboardingClientProps) {
-  const { data, updateData } = useOnboardingForm();
+export function OnboardingClient({ catalogue, profile }: OnboardingClientProps) {
+  /*
+   * Editing rather than onboarding changes three things: the form opens
+   * prefilled, a key already on file counts as satisfying the gate, and the
+   * marketing step is skipped — it was answered the first time round and asking
+   * again would be noise.
+   */
+  const isEditing = profile !== null;
+  const { data, updateData } = useOnboardingForm(profile?.values);
   const {
     step,
     totalSteps,
@@ -72,10 +82,18 @@ export function OnboardingClient({ catalogue }: OnboardingClientProps) {
    * that provider would otherwise leave the finish button enabled with nothing
    * to submit.
    */
+  const savedProviders = profile?.savedProviders ?? [];
   const canSubmit = data.aiProviders.some(
-    (provider) => statusOf(provider).status === "valid"
+    (provider) =>
+      statusOf(provider).status === "valid" ||
+      // Already stored and still selected: leaving the field blank keeps it,
+      // so demanding a re-verification would mean re-pasting a working key to
+      // change an unrelated answer.
+      savedProviders.includes(provider)
   );
-  const submitHint = "Verify at least one model key to finish";
+  const submitHint = isEditing
+    ? "Keep a model key selected to save"
+    : "Verify at least one model key to finish";
 
   /*
    * Which step the user last tried to leave with something missing. Storing the
@@ -92,8 +110,12 @@ export function OnboardingClient({ catalogue }: OnboardingClientProps) {
    * credentials that need fixing.
    */
   const handleQueueSearch = async () => {
-    const queued = await handleSubmit(data);
-    if (queued) handleNext();
+    const saved = await handleSubmit(data);
+    if (!saved) return;
+    // Editing ends here; first-time onboarding continues to the marketing step
+    // while the search runs.
+    if (isEditing) handleFinish(null);
+    else handleNext();
   };
 
   const handleGuardedNext = () => {
@@ -186,6 +208,8 @@ export function OnboardingClient({ catalogue }: OnboardingClientProps) {
 
             {step === 5 && (
               <StepApiKey
+                savedProviders={savedProviders}
+                hasSavedApifyKey={profile?.hasSavedApifyKey ?? false}
                 aiProviders={data.aiProviders}
                 aiKeys={data.aiKeys}
                 apifyKey={data.apifyKey}
@@ -230,6 +254,7 @@ export function OnboardingClient({ catalogue }: OnboardingClientProps) {
         isFirstStep={isFirstStep}
         isLastStep={isLastStep}
         isSubmitStep={isSubmitStep}
+        isEditing={isEditing}
         isSubmitting={isSubmitting}
         canSubmit={canSubmit}
         submitHint={submitHint}

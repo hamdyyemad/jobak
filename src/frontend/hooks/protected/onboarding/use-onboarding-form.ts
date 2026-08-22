@@ -17,8 +17,14 @@ const initialData: OnboardingData = {
     apifyKey: "",
 };
 
-export function useOnboardingForm() {
-    const [data, setData] = useState<OnboardingData>(initialData);
+/**
+ * `initial` is the saved profile when this is being used as Settings.
+ *
+ * Keys are deliberately absent from it: `aiKeys` and `apifyKey` always start
+ * empty, and blank means "keep what is stored" rather than "clear it".
+ */
+export function useOnboardingForm(initial?: Partial<OnboardingData>) {
+    const [data, setData] = useState<OnboardingData>({ ...initialData, ...initial });
 
     const updateData = (updates: Partial<OnboardingData>) => {
         setData((prev) => ({ ...prev, ...updates }));

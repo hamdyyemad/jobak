@@ -7,6 +7,8 @@ interface OnboardingNavigationProps {
   isLastStep: boolean;
   /** Step 5 — the action that queues the search, not the end of the flow. */
   isSubmitStep: boolean;
+  /** Settings rather than first-run: the action saves and leaves. */
+  isEditing: boolean;
   isSubmitting: boolean;
   /** Blocks the final action until at least one AI key has been verified. */
   canSubmit: boolean;
@@ -31,6 +33,7 @@ export function OnboardingNavigation({
   isFirstStep,
   isLastStep,
   isSubmitStep,
+  isEditing,
   isSubmitting,
   canSubmit,
   submitHint,
@@ -97,7 +100,7 @@ export function OnboardingNavigation({
               disabled={isSubmitting || !canSubmit}
               className="flex items-center gap-2.5 border border-(--sc-a) bg-(--sc-a)/12 px-6 py-3 font-mono text-[11px] uppercase tracking-[0.22em] text-(--fg-primary) transition-all hover:bg-(--sc-a)/22 disabled:cursor-not-allowed disabled:border-border-standard disabled:bg-transparent disabled:text-(--fg-quaternary)"
             >
-              {isSubmitting ? "Searching" : "Find my jobs"}
+              {isSubmitting ? (isEditing ? "Saving" : "Searching") : isEditing ? "Save changes" : "Find my jobs"}
               {!isSubmitting && <ArrowRight className="h-3.5 w-3.5" />}
             </button>
           ) : (
