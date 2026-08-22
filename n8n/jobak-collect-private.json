@@ -1,21 +1,25 @@
 {
-  "name": "Jobak — Collect (Apify, on demand)",
+  "name": "Jobak — Collect (private · user terms, 30 min)",
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "jobak-collect-apify",
-        "options": {}
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
       },
-      "id": "on-search-pressed",
-      "name": "On Search Pressed",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "id": "every-30-minutes",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
       "position": [
         400,
         300
-      ],
-      "webhookId": "jobak-collect-apify"
+      ]
     },
     {
       "parameters": {
@@ -32,21 +36,25 @@
     },
     {
       "parameters": {
-        "url": "={{ $('Verify Request').first().json.appUrl }}/api/v1/internal/collect-targets?userId={{ $('Verify Request').first().json.userId }}",
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.supabaseUrl }}/rest/v1/rpc/collect_targets_private",
         "sendHeaders": true,
         "specifyHeaders": "json",
-        "jsonHeaders": "={{ JSON.stringify({ 'x-webhook-secret': $('Set Config').first().json.webhookSecret }) }}",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $('Set Config').first().json.supabaseKey, 'Authorization': 'Bearer ' + $('Set Config').first().json.supabaseKey, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"p_max\":60}",
         "options": {
           "response": {
             "response": {
               "neverError": true
             }
           },
-          "timeout": 30000
+          "timeout": 15000
         }
       },
-      "id": "get-apify-users",
-      "name": "Get Apify Users",
+      "id": "user-search-terms",
+      "name": "User Search Terms",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -58,10 +66,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// One item per (user, term). A user's paid token only ever runs that user's own\n// search — the results land in the shared pool and help everyone, but nobody's\n// credits are spent on a search they did not ask for.\nconst payload = $input.first().json;\nconst body = Array.isArray(payload.apifyUsers) ? payload : payload.body;\nconst users = (body && body.apifyUsers) || [];\n\nif (users.length === 0) {\n  console.log('No users have connected an Apify token — nothing to do.');\n  return [];\n}\n\nconst out = [];\nfor (const u of users) {\n  for (const term of u.terms) {\n    const country = u.worldwide ? null : (u.countries[0] || null);\n    out.push({ json: {\n      _target: { term, countryCode: country, worldwide: !!u.worldwide },\n      userId: u.userId, apifyKey: u.apifyKey, term,\n      countryCode: country, worldwide: u.worldwide, workPreference: u.workPreference\n    } });\n  }\n}\nconsole.log('Apify: ' + out.length + ' run(s) across ' + users.length + ' user(s)');\nreturn out;"
+        "jsCode": "// One item per distinct (title, country) pair the user base cares about.\n// Deduplicated by the app, so two people hunting the same role in the same\n// market is one collection job rather than two.\nconst payload = $input.first().json;\nconst body = Array.isArray(payload.freeTerms) ? payload : payload.body;\nconst terms = (body && body.freeTerms) || [];\n\nif (terms.length === 0) {\n  console.log('No active search terms — nobody has completed onboarding yet.');\n  return [];\n}\nconsole.log('Collecting ' + terms.length + ' term(s) across ' + (body.meta?.activeUsers ?? '?') + ' user(s)');\n\nreturn terms.map(t => ({ json: { _target: { term: t.term, countryCode: t.countries[0] || null, worldwide: !!t.worldwide },\n                                 term: t.term, countries: t.countries, worldwide: t.worldwide } }));"
       },
-      "id": "split-apify-jobs",
-      "name": "Split Apify Jobs",
+      "id": "split-terms",
+      "name": "Split Terms",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -75,8 +83,8 @@
           "reset": false
         }
       },
-      "id": "apify-loop",
-      "name": "Apify Loop",
+      "id": "term-loop",
+      "name": "Term Loop",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
@@ -86,27 +94,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Enum values come from each actor's published input schema: LinkedIn workType\n// 1/2/3 = On-Site/Remote/Hybrid, publishedAt r86400/r604800/r2592000.\nconst p = $input.item.json;\n\nlet countryName = p.countryCode || '';\nif (p.countryCode) {\n  try { countryName = new Intl.DisplayNames(['en'], { type: 'region' }).of(p.countryCode) || p.countryCode; }\n  catch (e) { countryName = p.countryCode; }\n}\nconst location = p.worldwide || !countryName ? 'Worldwide' : countryName;\n\nconst workTypeMap = { 'remote': '2', 'on-site': '1', 'hybrid': '3' };\nconst workType = (p.workPreference || []).length === 1 ? (workTypeMap[p.workPreference[0]] || '') : '';\n\nconst linkedInInput = {\n  title: p.term, location, rows: 50, publishedAt: 'r604800',\n  proxy: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] }\n};\nif (workType) linkedInInput.workType = workType;\n\nreturn { json: { ...p, linkedInInput } };"
-      },
-      "id": "build-actor-input",
-      "name": "Build Actor Input",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1600,
-        300
-      ]
-    },
-    {
-      "parameters": {
         "method": "POST",
-        "url": "=https://api.apify.com/v2/acts/bebity~linkedin-jobs-scraper/run-sync-get-dataset-items",
+        "url": "={{ $('Set Config').first().json.scraperUrl }}/api/scrape",
         "sendHeaders": true,
         "specifyHeaders": "json",
-        "jsonHeaders": "={{ JSON.stringify({ 'Authorization': 'Bearer ' + $json.apifyKey, 'Content-Type': 'application/json' }) }}",
+        "jsonHeaders": "={{ JSON.stringify({ 'x-scraper-secret': $('Set Config').first().json.scraperSecret, 'Content-Type': 'application/json' }) }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.linkedInInput) }}",
+        "jsonBody": "={{ JSON.stringify({ query: $json.term, countries: $json.countries, worldwide: $json.worldwide, workPreference: [], limit: $('Set Config').first().json.limitPerTerm, ats: $('Set Config').first().json.ats }) }}",
         "options": {
           "response": {
             "response": {
@@ -114,15 +109,15 @@
               "responseFormat": "json"
             }
           },
-          "timeout": 300000
+          "timeout": 90000
         }
       },
-      "id": "apify---linkedin",
-      "name": "Apify - LinkedIn",
+      "id": "scrape-free-sources",
+      "name": "Scrape Free Sources",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1840,
+        1600,
         300
       ],
       "alwaysOutputData": true,
@@ -130,14 +125,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Actor output is not a versioned contract, so every field is read from a list\n// of likely names. A rename shows up as a run that collects nothing, rather\n// than a crash.\nfunction pick(obj, keys, fallback) {\n  for (const k of keys) {\n    const v = k.split('.').reduce((o, part) => (o == null ? o : o[part]), obj);\n    if (v !== undefined && v !== null && v !== '') return v;\n  }\n  return fallback;\n}\nconst clean = s => String(s == null ? '' : s).replace(/\\s+/g, ' ').trim();\n\nconst target = $('Apify Loop').first().json._target || {};\nconst rows = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  if (Array.isArray(j)) rows.push(...j);\n  else if (Array.isArray(j.body)) rows.push(...j.body);\n}\n\nif (rows.length === 0) {\n  console.log('Apify returned 0 rows for \"' + (target.term || '?') + '\"');\n  return [{ json: { _target: target } }];\n}\n\nconst out = [];\nconst seen = new Set();\nfor (const r of rows) {\n  const apply_url = clean(pick(r, ['jobUrl', 'url', 'link', 'applyUrl'], ''));\n  const title = clean(pick(r, ['title', 'jobTitle', 'position'], ''));\n  if (!apply_url || !title || seen.has(apply_url)) continue;\n  seen.add(apply_url);\n\n  const location = clean(pick(r, ['location', 'jobLocation', 'place'], ''));\n  const raw = (title + ' ' + location + ' ' + clean(pick(r, ['workType', 'workplaceType'], ''))).toLowerCase();\n  let job_type = 'onsite';\n  if (raw.includes('remote')) job_type = 'remote';\n  else if (raw.includes('hybrid')) job_type = 'hybrid';\n\n  out.push({\n    title, company: clean(pick(r, ['companyName', 'company'], 'Unknown')),\n    location: location || 'Not specified', job_type,\n    description: clean(pick(r, ['description', 'descriptionText'], '')).substring(0, 4000),\n    apply_url,\n    salary_text: clean(pick(r, ['salary', 'salaryInfo'], '')) || null,\n    posted_at_source: pick(r, ['publishedAt', 'datePosted', 'postedAt'], null),\n    source_key: 'apify_linkedin',\n    external_id: String(pick(r, ['id', 'jobId'], apply_url)),\n    _countryCode: target.countryCode,\n    _target: target\n  });\n}\nconsole.log('Apify LinkedIn: ' + out.length + ' jobs for \"' + (target.term || '?') + '\"');\nreturn out.map(j => ({ json: j }));"
+        "jsCode": "// The scraper already emits the unified schema, so there is nothing to map —\n// only to attach the target country and surface per-source outcomes.\nconst target = $('Term Loop').first().json._target || {};\nconst payload = $input.first().json;\nconst body = payload && (Array.isArray(payload.jobs) ? payload : payload.body);\n\nif (!body || !Array.isArray(body.jobs)) {\n  console.log('Scraper returned nothing usable: ' + JSON.stringify(payload).substring(0, 300));\n  return [{ json: { _target: target } }];\n}\n\nfor (const r of (body.meta?.sources || [])) {\n  console.log('  ' + String(r.source).padEnd(16) + (r.ok ? 'ok  ' : 'FAIL') + ' ' + r.count + ' in ' + r.ms + 'ms' + (r.error ? ' — ' + r.error : ''));\n}\n\nif (body.jobs.length === 0) return [{ json: { _target: target } }];\nreturn body.jobs.map(j => ({ json: { ...j, _countryCode: target.countryCode, _target: target } }));"
       },
-      "id": "normalize-apify",
-      "name": "Normalize Apify",
+      "id": "unpack-scraper",
+      "name": "Unpack Scraper",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2080,
+        1840,
         300
       ],
       "alwaysOutputData": true
@@ -151,7 +146,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2320,
+        2080,
         300
       ]
     },
@@ -179,7 +174,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2560,
+        2320,
         300
       ],
       "alwaysOutputData": true,
@@ -187,14 +182,14 @@
     },
     {
       "parameters": {
-        "jsCode": "const COLLECTOR = 'apify';\n// Records what the run actually did. Scheduled collectors are unattended, so\n// \"did the 03:00 run work\" needs an answer that does not involve opening n8n.\nconst prepared = $('Prepare Job Rows').first().json;\nconst response = $input.first().json;\n\nlet inserted = 0;\nif (Array.isArray(response)) inserted = response.length;\nelse if (Array.isArray(response.body)) inserted = response.body.length;\n\nconst ok = !(response && response.code && response.message);\n\nreturn [{ json: {\n  collector: COLLECTOR,\n  term: prepared.term || null,\n  country_code: prepared.countryCode || null,\n  found: prepared.found || 0,\n  inserted,\n  ok,\n  detail: ok ? null : String(response.message).substring(0, 400)\n} }];"
+        "jsCode": "const COLLECTOR = 'private';\n// Records what the run actually did. Scheduled collectors are unattended, so\n// \"did the 03:00 run work\" needs an answer that does not involve opening n8n.\nconst prepared = $('Prepare Job Rows').first().json;\nconst response = $input.first().json;\n\nlet inserted = 0;\nif (Array.isArray(response)) inserted = response.length;\nelse if (Array.isArray(response.body)) inserted = response.body.length;\n\nconst ok = !(response && response.code && response.message);\n\nreturn [{ json: {\n  collector: COLLECTOR,\n  term: prepared.term || null,\n  country_code: prepared.countryCode || null,\n  found: prepared.found || 0,\n  inserted,\n  ok,\n  detail: ok ? null : String(response.message).substring(0, 400)\n} }];"
       },
       "id": "build-run-log",
       "name": "Build Run Log",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2800,
+        2560,
         300
       ]
     },
@@ -221,7 +216,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3040,
+        2800,
         300
       ],
       "alwaysOutputData": true,
@@ -281,15 +276,98 @@
     },
     {
       "parameters": {
-        "jsCode": "/*\n * The webhook is the trust boundary, and n8n leaves it open by default.\n *\n * Everything past this node spends the named user's Apify credit, so an\n * unauthenticated caller must not get to choose whose. Without this check a\n * POST to the public webhook URL with someone else's id drains their balance.\n *\n * Belt and braces: also switch the webhook node to Header Auth in n8n, which\n * stops the request before the workflow runs at all.\n */\nconst cfg = $('Set Config').first().json;\nconst trigger = $('On Search Pressed').first().json;\nconst headers = trigger.headers || {};\n\nconst provided = String(headers['x-webhook-secret'] || headers['X-Webhook-Secret'] || '');\nconst expected = String(cfg.webhookSecret || '');\n\n// Compared in constant time, and never reported back to the caller in detail.\nif (!expected || provided.length !== expected.length) throw new Error('Unauthorized');\nlet diff = 0;\nfor (let i = 0; i < expected.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);\nif (diff !== 0) throw new Error('Unauthorized');\n\n/*\n * The id is interpolated into a URL downstream and decides whose token is\n * spent, so it has to look like one of ours before it goes anywhere. A strict\n * uuid shape also removes any question of query-string injection.\n */\nconst userId = String((trigger.body || {}).userId || '');\nif (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {\n  throw new Error('Invalid userId');\n}\n\nreturn [{ json: { ...cfg, userId } }];"
+        "content": "## Private collector\n\nSame pipeline as the public collector, different question: it collects **the titles our users actually chose**, deduplicated across the whole user base.\n\nThis is the half that decides whether a real person’s dashboard fills up, so it runs **every 30 minutes** and never waits its turn behind ~95 catalogue titles.\n\nStill free sources only — **Apify is never involved here.** A user’s token is spent only when they press Search.\n\n**Sibling:** *Jobak — Collect (public · catalogue sweep)*.",
+        "height": 240,
+        "width": 340,
+        "color": 3
       },
-      "id": "verify-request",
-      "name": "Verify Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "note-what",
+      "name": "Note — What this is",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
       "position": [
-        760,
-        140
+        340,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2 · No pointer here\n\nCalls the Postgres function **`collect_targets_private(p_max)`** directly — no app round trip.\n\nIt returns every distinct *(title, market)* pair across all onboarded users, capped at 60.\n\n**No cursor, on purpose.** The public sweep rotates because the catalogue is far too big for one run. Here the entire point is that *every* user’s terms are collected on *every* run, not a rotating slice of them.\n\nTwo users hunting the same title in the same market is **one** collection job — the pool is shared, so collecting it twice buys nothing.",
+        "height": 240,
+        "width": 480,
+        "color": 2
+      },
+      "id": "note-pointer",
+      "name": "Note — No pointer here",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1 · Config & lookups\n\n**`Set Config` — edit before activating.** URLs and secrets live here, and the same values must appear in every Jobak workflow.\n\nThis workflow no longer calls the app at all: terms come from a Postgres function, and the lookups below are plain PostgREST reads.\n\n⚠️ The three HTTP nodes here are set to **Execute Once**.\n\nn8n runs a node once *per input item*. Without that flag, 247 region rows × 12 source rows produced **2,964** calls and timed the endpoint out.",
+        "height": 240,
+        "width": 300,
+        "color": 7
+      },
+      "id": "note-config",
+      "name": "Note — Config & lookups",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        700,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3 · One term at a time\n\n`Term Loop` hands the scraper a **single user term per iteration**; `Scrape Free Sources` fans it out across every free source.\n\nNo `maxAgeDays` here, unlike the public sweep: a real user wants everything that matches, not only what appeared today. The pool upserts on `apply_url`, so re-seeing a listing costs one row either way.\n\n`Unpack Scraper` attaches the target country and logs each source result.",
+        "height": 240,
+        "width": 460,
+        "color": 5
+      },
+      "id": "note-collect",
+      "name": "Note — Per-term collection",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4 · Into the shared pool\n\n`Prepare Job Rows` validates everything that reaches a typed column. This is a **bulk** insert — one bad timestamp or one unknown foreign key fails *every row in the batch*, not just its own. That is why `source_id` and `region_id` are resolved by name with a null fallback instead of being hardcoded.\n\n`Insert Jobs (bulk)` upserts on `apply_url`, so the same posting found twice is one row.\n\n`Log Run` writes `collection_runs` so an unattended run can be checked without opening n8n.",
+        "height": 240,
+        "width": 520,
+        "color": 4
+      },
+      "id": "note-write",
+      "name": "Note — Into the pool",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2040,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Foreign-key lookups\n\nRead once per run, then referenced downstream as `$('Fetch Regions')` and `$('Fetch Sources')`.\n\nIds are deliberately **not** hardcoded: a reseeded or reordered `sources` table used to break the bulk insert with a `23503` foreign-key violation.\n\nAn unknown code or key becomes `null` — an unattributed job still belongs in the pool.",
+        "height": 180,
+        "width": 480,
+        "color": 6
+      },
+      "id": "note-lookups",
+      "name": "Note — FK lookups",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        700,
+        600
       ]
     }
   ],
@@ -298,70 +376,48 @@
       "main": [
         [
           {
-            "node": "Verify Request",
+            "node": "Fetch Regions",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get Apify Users": {
+    "Split Terms": {
       "main": [
         [
           {
-            "node": "Split Apify Jobs",
+            "node": "Term Loop",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Split Apify Jobs": {
-      "main": [
-        [
-          {
-            "node": "Apify Loop",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apify Loop": {
+    "Term Loop": {
       "main": [
         [],
         [
           {
-            "node": "Build Actor Input",
+            "node": "Scrape Free Sources",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Actor Input": {
+    "Scrape Free Sources": {
       "main": [
         [
           {
-            "node": "Apify - LinkedIn",
+            "node": "Unpack Scraper",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Apify - LinkedIn": {
-      "main": [
-        [
-          {
-            "node": "Normalize Apify",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Normalize Apify": {
+    "Unpack Scraper": {
       "main": [
         [
           {
@@ -409,7 +465,7 @@
       "main": [
         [
           {
-            "node": "Apify Loop",
+            "node": "Term Loop",
             "type": "main",
             "index": 0
           }
@@ -431,14 +487,14 @@
       "main": [
         [
           {
-            "node": "Get Apify Users",
+            "node": "User Search Terms",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "On Search Pressed": {
+    "Every 30 Minutes": {
       "main": [
         [
           {
@@ -449,11 +505,11 @@
         ]
       ]
     },
-    "Verify Request": {
+    "User Search Terms": {
       "main": [
         [
           {
-            "node": "Fetch Regions",
+            "node": "Split Terms",
             "type": "main",
             "index": 0
           }

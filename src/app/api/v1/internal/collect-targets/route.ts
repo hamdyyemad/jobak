@@ -4,27 +4,42 @@ import { decryptApiKey } from "@/backend/lib/crypto/api-key";
 import { logServerError } from "@/backend/lib/errors";
 
 /**
- * What the scheduled collectors should go and fetch.
+ * One user's Apify collection target.
  *
- * Called by n8n, not by a browser. It exists so that decryption stays in the
- * app: n8n would otherwise need `ENCRYPTION_SECRET`, which would put every
- * user's provider keys one compromised workflow away from being readable.
+ * Called by n8n, not by a browser, and only when that user pressed Search.
+ * Returns their token and their own search terms — nothing belonging to anyone
+ * else, and nothing at all without a `userId`.
  *
- * Returns two things:
- *  - `freeTerms`  — the distinct (title, country) pairs worth collecting for
- *                   anyone. The self-hosted scraper costs nothing per call, so
- *                   this is deduplicated across the whole user base.
- *  - `apifyUsers` — users who connected a token, each with *their own* search
- *                   terms. A paid token is only ever spent on the search its
- *                   owner asked for; the results land in the shared pool and
- *                   benefit everyone incidentally.
+ * This is the last thing the collectors still ask the app for, and it is here
+ * for one reason: it decrypts an Apify token. `ENCRYPTION_SECRET` must never
+ * reach n8n or Postgres, so the decryption cannot move with the rest.
+ *
+ * The scheduled collectors used to call this too. They now call the Postgres
+ * functions `collect_targets_public()` and `collect_targets_private()` instead
+ * — see `supabase/collect-targets-rpc.sql`. Everything those need (catalogue,
+ * cursor, preferences) was already in the database, so the round trip through a
+ * serverless function bought nothing but a timeout risk. Keeping a second copy
+ * of that logic here would be the same drift that has broken this pipeline
+ * before, so it is gone rather than deprecated.
  */
 
 export const dynamic = "force-dynamic";
 
-/** Caps a single scheduled run so one huge user base cannot stall the workflow. */
-const MAX_FREE_TERMS = 60;
-const MAX_APIFY_USERS = 25;
+/**
+ * `userId` decides whose Apify token this endpoint decrypts and hands out, so
+ * it is checked for shape before it is used to look anything up. The workflow
+ * validates it too; this is here so the guarantee does not depend on a workflow
+ * anyone can re-import and edit.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface PrefRow {
+    user_id: string;
+    job_titles: string[] | null;
+    location: { countries?: string[]; worldwide?: boolean } | null;
+    work_preference: string[] | null;
+    apify_key_encrypted: string | null;
+}
 
 function isAuthorized(request: NextRequest): boolean {
     const expected = process.env.N8N_WEBHOOK_SECRET;
@@ -39,101 +54,67 @@ function isAuthorized(request: NextRequest): boolean {
     return diff === 0;
 }
 
-interface PrefRow {
-    user_id: string;
-    job_titles: string[] | null;
-    location: { countries?: string[]; worldwide?: boolean } | null;
-    work_preference: string[] | null;
-    apify_key_encrypted: string | null;
-}
-
 export async function GET(request: NextRequest) {
     if (!isAuthorized(request)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = request.nextUrl.searchParams.get("userId");
+
+    if (!userId || !UUID.test(userId)) {
+        return NextResponse.json(
+            { error: "A well-formed userId is required" },
+            { status: 400 }
+        );
+    }
+
     try {
         const service = createServiceClient();
+
         const { data, error } = await service
             .from("user_preferences")
             .select("user_id, job_titles, location, work_preference, apify_key_encrypted")
-            .eq("onboarding_completed", true);
+            .eq("user_id", userId)
+            .eq("onboarding_completed", true)
+            .single();
 
-        if (error) {
-            logServerError("internal/collect-targets:select", error);
-            return NextResponse.json({ error: "Could not read preferences" }, { status: 500 });
+        if (error || !data) {
+            return NextResponse.json({ apifyUsers: [], meta: { reason: "no such user" } });
         }
 
-        const rows = (data ?? []) as PrefRow[];
+        const row = data as PrefRow;
+        const titles = (row.job_titles ?? []).filter(Boolean);
 
-        // ── Free collector: one entry per distinct title+country pair ──
-        const freeSeen = new Set<string>();
-        const freeTerms: { term: string; countries: string[]; worldwide: boolean }[] = [];
-
-        for (const row of rows) {
-            const titles = (row.job_titles ?? []).filter(Boolean);
-            const worldwide = Boolean(row.location?.worldwide);
-            const countries = worldwide ? [] : (row.location?.countries ?? []).filter(Boolean);
-
-            for (const term of titles) {
-                // Deduped across users: two people hunting "Backend Engineer" in
-                // Egypt is one collection job, not two.
-                const key = `${term.toLowerCase()}|${countries.slice().sort().join(",")}|${worldwide}`;
-                if (freeSeen.has(key)) continue;
-                freeSeen.add(key);
-                freeTerms.push({ term, countries, worldwide });
-                if (freeTerms.length >= MAX_FREE_TERMS) break;
-            }
-            if (freeTerms.length >= MAX_FREE_TERMS) break;
-        }
-
-        // ── Apify collector: per user, their own terms only ──
-        const apifyUsers: {
-            userId: string;
-            apifyKey: string;
-            terms: string[];
-            countries: string[];
-            worldwide: boolean;
-            workPreference: string[];
-        }[] = [];
-
-        for (const row of rows) {
-            if (!row.apify_key_encrypted) continue;
-            if (apifyUsers.length >= MAX_APIFY_USERS) break;
-
-            const titles = (row.job_titles ?? []).filter(Boolean);
-            if (titles.length === 0) continue;
-
-            let apifyKey: string;
-            try {
-                apifyKey = await decryptApiKey(row.apify_key_encrypted);
-            } catch (decryptError) {
-                // A key encrypted under a rotated secret should skip that user,
-                // not fail the whole scheduled run.
-                logServerError("internal/collect-targets:decrypt", decryptError);
-                continue;
-            }
-
-            const worldwide = Boolean(row.location?.worldwide);
-            apifyUsers.push({
-                userId: row.user_id,
-                apifyKey,
-                terms: titles,
-                countries: worldwide ? [] : (row.location?.countries ?? []).filter(Boolean),
-                worldwide,
-                workPreference: row.work_preference ?? [],
+        if (!row.apify_key_encrypted || titles.length === 0) {
+            // Not an error: most users never connect a token, and the free
+            // collectors keep filling the pool for them regardless.
+            return NextResponse.json({
+                apifyUsers: [],
+                meta: { reason: row.apify_key_encrypted ? "no job titles" : "no apify token" },
             });
         }
 
+        let apifyKey: string;
+        try {
+            apifyKey = await decryptApiKey(row.apify_key_encrypted);
+        } catch (decryptError) {
+            logServerError("internal/collect-targets:decrypt", decryptError);
+            return NextResponse.json({ apifyUsers: [], meta: { reason: "key undecryptable" } });
+        }
+
+        const worldwide = Boolean(row.location?.worldwide);
         return NextResponse.json({
-            freeTerms,
-            apifyUsers,
-            meta: {
-                activeUsers: rows.length,
-                freeTermCount: freeTerms.length,
-                apifyUserCount: apifyUsers.length,
-                generatedAt: new Date().toISOString(),
-            },
+            apifyUsers: [
+                {
+                    userId: row.user_id,
+                    apifyKey,
+                    terms: titles,
+                    countries: worldwide ? [] : (row.location?.countries ?? []).filter(Boolean),
+                    worldwide,
+                    workPreference: row.work_preference ?? [],
+                },
+            ],
+            meta: { onDemand: true, generatedAt: new Date().toISOString() },
         });
     } catch (error) {
         logServerError("internal/collect-targets", error);

@@ -233,12 +233,23 @@ collectors fill for everyone; `user_job_matches` is the per-user scored subset
 the dashboard reads. Three workflows in `n8n/`, replacing the single
 `jobak-job-search-v2.json`.
 
-- [ ] **Run the pipeline migration** at the bottom of `supabase/schema.sql`:
-      `pg_trgm`, `jobs.country_code`, the filter indexes, `collection_runs`, the
-      `match_candidate_jobs` function, and sources 6–12.
-- [ ] **Import and schedule the three workflows.** `jobak-collect-free` (4h),
-      `jobak-collect-apify` (12h), `jobak-match-user` (webhook + 03:00 nightly).
-      Each has the same `Set Config` block — six values, edited in three places.
+- [ ] **Run the SQL, in this order.** `supabase/schema.sql` was only partly
+      applied to the live database, which is where the `country_code`,
+      `SOURCE_IDS` and `collection_runs` failures came from. There is no
+      `jobs.country_code` — geography is `jobs.region_id` → `regions(id)`.
+      1. `collection_runs` + `match_candidate_jobs` from `supabase/schema.sql`
+      2. `supabase/seed-regions.sql` — all 246 countries
+      3. `supabase/seed-sources.sql` — the 7 sources missing from the original 5
+      4. `supabase/phase-2-schema.sql` — queue, marketing, cursor, match unique key
+      5. `supabase/job-catalogue.sql` — 13 fields / 95 titles
+      6. `UPDATE collection_cursor SET position = 0 WHERE id = 1;`
+- [ ] **Import and schedule the four workflows.**
+      `jobak-collect-public` (hourly catalogue sweep),
+      `jobak-collect-private` (30 min, the titles users actually chose),
+      `jobak-collect-apify` (**webhook only — never scheduled**; it spends the
+      user's own credit and runs only when they press Search),
+      `jobak-match-user` (webhook + 03:00 nightly).
+      Each has the same `Set Config` block, edited in every workflow.
 - [x] **Wire the dashboard.** Done. `getUserJobs()` returns real matches with
       tech_stack, description and correct source names; refresh triggers the
       matcher and `router.refresh()` re-reads; bookmarks persist. The dead

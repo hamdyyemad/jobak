@@ -1,6 +1,5 @@
 import type { OnboardingData } from "@/frontend/types/on-boarding";
 import { countryName } from "@/frontend/lib/configs/countries";
-import { fieldLabel } from "@/frontend/lib/configs/job-titles";
 import { aiProviderOptions, seniorityFromExperience, seniorityOptions, workOptions } from "./data";
 
 export interface ReadoutRow {
@@ -43,12 +42,17 @@ function whereLabel(data: OnboardingData): string {
     return `${countryName(countries[0])} +${countries.length - 1}`;
 }
 
-function fieldValue(data: OnboardingData): string {
+/**
+ * `label` is resolved by the caller rather than looked up here: the catalogue
+ * lives in the database now, and this module has to stay synchronous and
+ * client-safe.
+ */
+function fieldValue(data: OnboardingData, label: string): string {
     if (!data.field) return EMPTY;
     const level = seniorityOptions.find(
         (o) => o.value === (data.seniority ?? seniorityFromExperience(data.experience))
     );
-    return data.experience > 0 ? `${fieldLabel(data.field)} · ${level?.label}` : fieldLabel(data.field);
+    return data.experience > 0 ? `${label} · ${level?.label}` : label;
 }
 
 function roleValue(data: OnboardingData): string {
@@ -72,11 +76,11 @@ function aiValue(data: OnboardingData): string {
  * point is that the scene reacts to the *form*, not to whichever step happens to
  * be on screen — the readout keeps every earlier answer visible while you work.
  */
-export function sceneState(data: OnboardingData, step: number): SceneState {
+export function sceneState(data: OnboardingData, step: number, fieldLabel: string): SceneState {
     const readout: ReadoutRow[] = [
         { step: 1, label: "Mode", value: workLabel(data) },
         { step: 2, label: "Where", value: whereLabel(data) },
-        { step: 3, label: "Field", value: fieldValue(data) },
+        { step: 3, label: "Field", value: fieldValue(data, fieldLabel) },
         { step: 4, label: "Role", value: roleValue(data) },
         { step: 5, label: "AI", value: aiValue(data) },
     ];
@@ -93,7 +97,7 @@ export function sceneState(data: OnboardingData, step: number): SceneState {
     const captions: Record<number, string> = {
         1: data.workPreference.length ? workLabel(data) : "Select a mode",
         2: whereLabel(data) === EMPTY ? "Anywhere yet" : whereLabel(data),
-        3: data.field ? fieldValue(data) : "Choose a field",
+        3: data.field ? fieldValue(data, fieldLabel) : "Choose a field",
         4: roleValue(data) === EMPTY ? "Pick your roles" : roleValue(data),
         5: aiValue(data) === EMPTY ? "Connect a provider" : aiValue(data),
     };

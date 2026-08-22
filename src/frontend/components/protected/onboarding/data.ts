@@ -39,6 +39,7 @@ export const stepKickers = [
     "Discipline",
     "Target role",
     "Intelligence",
+    "Almost done",
 ];
 
 export const stepTitles = [
@@ -47,6 +48,7 @@ export const stepTitles = [
     "What's your field?",
     "What are you looking for?",
     "Connect your AI",
+    "While we search…",
 ];
 
 export const stepDescriptions = [
@@ -55,6 +57,7 @@ export const stepDescriptions = [
     "Tell us your profession and the skills you bring.",
     "Define your ideal job type and the roles you're after.",
     "Choose a provider and add its key — we'll verify it before you continue.",
+    "Your first search is already running. Three quick questions while it does.",
 ];
 
 

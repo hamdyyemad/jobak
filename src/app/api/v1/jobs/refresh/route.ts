@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
 import {
@@ -9,17 +9,26 @@ import {
 } from "@/backend/lib/errors";
 
 /**
- * Asks the matcher to score whatever the collectors have added since last time.
+ * The dashboard's Search button.
  *
- * This used to run the whole pipeline per user — scrape, score, insert — which
- * meant a refresh took minutes and re-collected listings other users had already
- * paid to fetch. Collection now runs on its own schedule into a shared pool, so
- * this only triggers the per-user half: narrow the pool, score what is new,
- * write the matches. Seconds, not minutes.
+ * Two halves, in order:
  *
- * No keys are sent. The matcher pulls the user's provider key and candidates
- * from `/api/v1/internal/match-candidates`, so a plaintext key never travels
- * with a request the browser can trigger.
+ *  1. **Collect** — if this user connected an Apify token, run the actors for
+ *     their own search terms. This is the *only* place Apify ever runs. It is
+ *     never scheduled: the token is the user's, the credit is theirs, and a
+ *     cron would spend it on searches they did not ask for. Users without a
+ *     token skip straight to scoring, since the free collector has already been
+ *     filling the shared pool hourly.
+ *
+ *  2. **Score** — narrow the pool for this user and write the matches.
+ *
+ * Neither is awaited. Collection runs to minutes, so the request is recorded in
+ * `search_requests`, the browser is answered immediately, and the triggers go
+ * out after the response.
+ *
+ * No keys are sent to either workflow. They pull the user's token and
+ * candidates from the internal endpoints, so a plaintext key never travels with
+ * a request the browser can trigger.
  */
 
 /** In-memory, per instance — enough to stop a held-down button. */
@@ -42,7 +51,7 @@ export async function POST() {
     if (since < MIN_INTERVAL_MS) {
       return NextResponse.json(
         {
-          error: `Just refreshed. Try again in ${Math.ceil((MIN_INTERVAL_MS - since) / 1000)}s.`,
+          error: `Just searched. Try again in ${Math.ceil((MIN_INTERVAL_MS - since) / 1000)}s.`,
         },
         { status: 429 }
       );
@@ -53,7 +62,7 @@ export async function POST() {
     const service = createServiceClient();
     const { data: prefs, error } = await service
       .from("user_preferences")
-      .select("onboarding_completed, ai_keys_encrypted")
+      .select("onboarding_completed, ai_keys_encrypted, apify_key_encrypted")
       .eq("user_id", user.id)
       .single();
 
@@ -78,6 +87,7 @@ export async function POST() {
     }
 
     const matchUrl = process.env.N8N_MATCH_WEBHOOK_URL;
+    const apifyUrl = process.env.N8N_APIFY_WEBHOOK_URL;
     const secret = process.env.N8N_WEBHOOK_SECRET;
 
     if (!matchUrl) {
@@ -91,29 +101,92 @@ export async function POST() {
 
     lastRun.set(user.id, Date.now());
 
-    const response = await fetch(matchUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(secret ? { "X-Webhook-Secret": secret } : {}),
-      },
-      body: JSON.stringify({ userId: user.id }),
+    const usesApify = Boolean(prefs.apify_key_encrypted && apifyUrl);
+
+    const { data: queued, error: queueError } = await service
+      .from("search_requests")
+      .insert({ user_id: user.id, kind: "dashboard", status: "queued" })
+      .select("id")
+      .single();
+
+    if (queueError) logServerError("jobs/refresh:queue", queueError);
+    const requestId: string | null = queued?.id ?? null;
+
+    after(async () => {
+      const mark = async (status: "running" | "done" | "failed", detail?: string) => {
+        if (!requestId) return;
+        await service
+          .from("search_requests")
+          .update({
+            status,
+            detail: detail?.slice(0, 400) ?? null,
+            ...(status === "running"
+              ? { started_at: new Date().toISOString() }
+              : { finished_at: new Date().toISOString() }),
+          })
+          .eq("id", requestId);
+      };
+
+      const trigger = (url: string) =>
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(secret ? { "X-Webhook-Secret": secret } : {}),
+          },
+          body: JSON.stringify({ userId: user.id, requestId }),
+        });
+
+      try {
+        await mark("running");
+
+        /*
+         * Collection first, and awaited, so the matcher scores a pool that
+         * already contains whatever Apify just found. A failure here is not
+         * fatal: the free sources have been collecting all along, so scoring
+         * what is already in the pool is still worth doing.
+         */
+        if (usesApify) {
+          try {
+            const collected = await trigger(apifyUrl as string);
+            if (!collected.ok) {
+              logServerError(
+                "jobs/refresh:apify",
+                new Error(`apify collector responded ${collected.status}`)
+              );
+            }
+          } catch (collectError) {
+            logServerError("jobs/refresh:apify", collectError);
+          }
+        }
+
+        const scored = await trigger(matchUrl);
+        if (!scored.ok) {
+          logServerError("jobs/refresh:n8n", new Error(`matcher responded ${scored.status}`));
+          await mark("failed", `Matcher responded ${scored.status}.`);
+          return;
+        }
+
+        await mark("done");
+      } catch (triggerError) {
+        logServerError("jobs/refresh:trigger", triggerError);
+        await mark("failed", "Could not reach the workflow.");
+      }
     });
 
-    if (!response.ok) {
-      logServerError("jobs/refresh:n8n", new Error(`matcher responded ${response.status}`));
-      return NextResponse.json(
-        { error: "We couldn't refresh your matches just now. Try again in a moment." },
-        { status: 502 }
-      );
-    }
-
-    const result = await response.json().catch(() => ({}));
-    return NextResponse.json({ success: true, matched: result.matched ?? 0 });
+    return NextResponse.json({
+      success: true,
+      queued: true,
+      requestId,
+      usesApify,
+      message: usesApify
+        ? "Searching your sources. New roles appear as they land — this takes a few minutes."
+        : "Scoring the latest roles for you. This usually takes under a minute.",
+    });
   } catch (error) {
     logServerError("jobs/refresh", error);
     return NextResponse.json(
-      { error: toUserMessage(error, "We couldn't refresh your matches. Please try again.") },
+      { error: toUserMessage(error, "We couldn't start your search. Please try again.") },
       { status: isConnectionError(error) ? 503 : 500 }
     );
   }

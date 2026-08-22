@@ -54,6 +54,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         workPreference: Array.isArray(body.workPreference) ? body.workPreference.map(String) : [],
         limit: Math.min(Number(body.limit) || 25, MAX_LIMIT),
         ats: body.ats && typeof body.ats === "object" ? body.ats : undefined,
+        // `maxAgeDays: 1` is "posted today" — what the scheduled collectors ask
+        // for, so a run that repeats hourly is not re-reading the same archive.
+        maxAgeDays: Number(body.maxAgeDays) > 0 ? Number(body.maxAgeDays) : undefined,
     };
 
     const requested: string[] = Array.isArray(body.sources) && body.sources.length
