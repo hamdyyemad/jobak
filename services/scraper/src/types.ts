@@ -33,6 +33,14 @@ export interface ScrapeParams {
      * { greenhouse: ["stripe"], ashby: ["ramp"] }.
      */
     ats?: Record<string, string[]>;
+    /**
+     * Drop anything posted more than this many days ago. 1 means today.
+     *
+     * Omit for no age limit. Listings with no posting date are kept either
+     * way: most feeds publish "latest N" without dating every row, and
+     * discarding undated rows would silently empty entire sources.
+     */
+    maxAgeDays?: number;
 }
 
 /**

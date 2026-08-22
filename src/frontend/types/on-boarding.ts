@@ -37,3 +37,18 @@ export interface OnboardingData {
     /** Required: without it there is nothing to collect listings with. */
     apifyKey: string;
 }
+
+/**
+ * Attribution, collected on the step that runs while the first search does.
+ *
+ * Deliberately not part of `OnboardingData`: none of it is sent to the collector
+ * or the matcher, and folding it into that payload would ship marketing answers
+ * to n8n on every run. Empty string means unanswered — the step is skippable and
+ * every field is optional.
+ */
+export interface MarketingAnswers {
+    heardFrom: string;
+    heardDetail: string;
+    goal: string;
+    searchStatus: string;
+}

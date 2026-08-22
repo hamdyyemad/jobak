@@ -1,28 +1,56 @@
 "use server";
 
 import { createClient } from "@/backend/lib/supabase/server";
+import { createServiceClient } from "@/backend/lib/supabase/service";
 import { Job, Workplace } from "@/frontend/types/dashboard";
 
 /**
- * Mirrors the `sources` table. Kept in step with the ids the collectors write —
- * see the SOURCE_IDS map in the n8n pipeline and the seed rows in schema.sql.
- * An unmapped id renders as "Other" rather than silently borrowing a name.
+ * How much of the pool to consider before narrowing by title in memory.
+ *
+ * Title matching cannot go in the query: PostgREST's `or=` treats commas and
+ * parentheses as syntax, and the catalogue is full of both ("Mobile Engineer
+ * (iOS)"). So the database narrows on the things it can index — active, work
+ * arrangement, region — and the titles are matched here.
  */
-const SOURCE_ID_TO_NAME: Record<number, string> = {
-  1: "Wuzzuf",
-  2: "RemoteOK",
-  3: "Remotive",
-  4: "LinkedIn",
-  5: "Indeed",
-  6: "Arbeitnow",
-  7: "Jobicy",
-  8: "Himalayas",
-  9: "We Work Remotely",
-  10: "Greenhouse",
-  11: "Ashby",
-  12: "Workable",
+const POOL_WINDOW = 400;
+
+/** What the dashboard will show after narrowing. */
+const MAX_RESULTS = 100;
+
+/** `user_preferences.work_preference` spells it "on-site"; `jobs.job_type` does not. */
+const WORKPLACE_BY_PREFERENCE: Record<string, string> = {
+  remote: "remote",
+  "on-site": "onsite",
+  hybrid: "hybrid",
 };
 
+interface PoolRow {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  job_type: string | null;
+  description: string | null;
+  tech_stack: string[] | null;
+  salary_text: string | null;
+  apply_url: string;
+  posted_at_source: string | null;
+  source_id: number | null;
+  created_at: string;
+}
+
+/**
+ * The jobs worth showing this user, from the shared pool.
+ *
+ * Reads `jobs` rather than only `user_job_matches`, because collection and
+ * scoring are separate now: the collectors fill the pool continuously, and the
+ * matcher scores it per user afterwards. Waiting for a score to show anything
+ * meant a new user stared at an empty dashboard for the length of a scoring run.
+ *
+ * A score is attached where one exists and left at zero where it does not, so
+ * matched jobs still sort to the top and unscored ones are visible underneath
+ * instead of hidden.
+ */
 export async function getUserJobs(): Promise<Job[]> {
   const supabase = await createClient();
 
@@ -32,61 +60,112 @@ export async function getUserJobs(): Promise<Job[]> {
 
   if (!user) return [];
 
-  const { data, error } = await supabase
-    .from("user_job_matches")
-    .select(
-      `
-      score,
-      is_bookmarked,
-      jobs (
-        id,
-        title,
-        company,
-        location,
-        job_type,
-        description,
-        tech_stack,
-        salary_text,
-        apply_url,
-        posted_at_source,
-        source_id,
-        created_at
-      )
-    `
-    )
+  // Service role: the pool is shared, and it is not readable per-user under RLS.
+  const service = createServiceClient();
+
+  const { data: prefs } = await service
+    .from("user_preferences")
+    .select("job_titles, location, work_preference")
     .eq("user_id", user.id)
-    .order("score", { ascending: false })
-    .limit(100);
+    .single();
+
+  const titles: string[] = (prefs?.job_titles ?? []).filter(Boolean);
+  const location = (prefs?.location ?? {}) as { countries?: string[]; worldwide?: boolean };
+  const workPreference: string[] = prefs?.work_preference ?? [];
+
+  // Without a profile there is nothing to narrow by, and showing the entire
+  // pool would be noise rather than a dashboard.
+  if (titles.length === 0) return [];
+
+  let query = service
+    .from("jobs")
+    .select(
+      "id, title, company, location, job_type, description, tech_stack, salary_text, apply_url, posted_at_source, source_id, created_at"
+    )
+    .eq("is_active", true)
+    .order("posted_at_source", { ascending: false, nullsFirst: false })
+    .limit(POOL_WINDOW);
+
+  const workplaces = workPreference
+    .map((preference) => WORKPLACE_BY_PREFERENCE[preference])
+    .filter(Boolean);
+
+  if (workplaces.length > 0) {
+    query = query.in("job_type", workplaces);
+  }
+
+  /*
+   * Geography, only when the user named somewhere. `region_id` is null on
+   * anything the collector could not attribute — remote-first boards mostly —
+   * and those are exactly the listings a country-specific search still wants,
+   * so they stay in rather than being filtered out.
+   */
+  const countries = (location.countries ?? []).filter(Boolean);
+  if (!location.worldwide && countries.length > 0) {
+    const { data: regions } = await service
+      .from("regions")
+      .select("id")
+      .in("country_code", countries);
+
+    const regionIds = (regions ?? []).map((r) => r.id);
+    if (regionIds.length > 0) {
+      query = query.or(`region_id.in.(${regionIds.join(",")}),region_id.is.null`);
+    }
+  }
+
+  const [{ data: pool, error }, { data: matches }, { data: sources }] = await Promise.all([
+    query,
+    service.from("user_job_matches").select("job_id, score, is_bookmarked").eq("user_id", user.id),
+    service.from("sources").select("id, display_name"),
+  ]);
 
   if (error) {
     console.error("getUserJobs error:", error);
     return [];
   }
 
-  return (data ?? [])
-    .filter((row) => row.jobs)
-    .map((row) => {
-      const job = row.jobs as unknown as Record<string, unknown>;
+  /*
+   * Source names come from the table rather than a constant. A hardcoded id map
+   * lived here and in the n8n workflows, and both drifted out of step with the
+   * rows that actually exist — an unknown id now reads "Other" because the row
+   * is genuinely missing, not because the map is stale.
+   */
+  const sourceName = new Map((sources ?? []).map((s) => [s.id as number, s.display_name as string]));
+  const matchByJob = new Map(
+    (matches ?? []).map((m) => [
+      m.job_id as string,
+      { score: (m.score as number) ?? 0, bookmarked: (m.is_bookmarked as boolean) ?? false },
+    ])
+  );
+
+  const wanted = titles.map(normalise);
+
+  return ((pool ?? []) as PoolRow[])
+    .filter((job) => wanted.some((title) => titleMatches(normalise(job.title), title)))
+    .map((job) => {
+      const match = matchByJob.get(job.id);
       return {
-        id: job.id as string,
-        title: job.title as string,
-        company: job.company as string,
-        location: job.location as string,
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        location: job.location ?? "",
         // The pool stores workplace type; contract type is not collected, so
         // it is not invented here either.
         type: "full-time",
-        workplace: toWorkplace(job.job_type as string),
-        salary: (job.salary_text as string) || "—",
-        score: row.score ?? 0,
-        source: SOURCE_ID_TO_NAME[job.source_id as number] ?? "Other",
-        link: job.apply_url as string,
-        postedAt: formatDate((job.posted_at_source as string | null) ?? (job.created_at as string)),
-        bookmarked: row.is_bookmarked ?? false,
+        workplace: toWorkplace(job.job_type ?? ""),
+        salary: job.salary_text || "—",
+        score: match?.score ?? 0,
+        source: (job.source_id !== null && sourceName.get(job.source_id)) || "Other",
+        link: job.apply_url,
+        postedAt: formatDate(job.posted_at_source ?? job.created_at),
+        bookmarked: match?.bookmarked ?? false,
         remote: job.job_type === "remote",
-        tags: Array.isArray(job.tech_stack) ? (job.tech_stack as string[]) : [],
-        description: (job.description as string) || "",
+        tags: Array.isArray(job.tech_stack) ? job.tech_stack : [],
+        description: job.description || "",
       } satisfies Job;
-    });
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_RESULTS);
 }
 
 export async function toggleBookmarkAction(jobId: string): Promise<boolean> {
@@ -97,20 +176,28 @@ export async function toggleBookmarkAction(jobId: string): Promise<boolean> {
   } = await supabase.auth.getUser();
   if (!user) return false;
 
-  const { data: existing } = await supabase
+  const service = createServiceClient();
+
+  const { data: existing } = await service
     .from("user_job_matches")
     .select("is_bookmarked")
     .eq("user_id", user.id)
     .eq("job_id", jobId)
-    .single();
+    .maybeSingle();
 
   const newValue = !(existing?.is_bookmarked ?? false);
 
-  const { error } = await supabase
+  /*
+   * Upsert, not update. The dashboard now lists pool jobs the matcher has not
+   * scored yet, and those have no match row — an update would report success
+   * while changing nothing, and the star would spring back on reload.
+   */
+  const { error } = await service
     .from("user_job_matches")
-    .update({ is_bookmarked: newValue })
-    .eq("user_id", user.id)
-    .eq("job_id", jobId);
+    .upsert(
+      { user_id: user.id, job_id: jobId, is_bookmarked: newValue },
+      { onConflict: "user_id,job_id" }
+    );
 
   if (error) {
     console.error("toggleBookmark error:", error);
@@ -118,6 +205,31 @@ export async function toggleBookmarkAction(jobId: string): Promise<boolean> {
   }
 
   return newValue;
+}
+
+/** Lowercase, punctuation stripped, so "Mobile Engineer (iOS)" can match "mobile engineer ios". */
+function normalise(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Whether a posting's title is the role the user asked for.
+ *
+ * Substring alone is too narrow — "Senior Backend Engineer, Payments" does not
+ * contain "backend engineer" as a phrase once punctuation is stripped, but it is
+ * plainly the same job. Requiring every significant word of the target instead
+ * keeps that match and still rejects "Engineering Manager".
+ */
+function titleMatches(jobTitle: string, target: string): boolean {
+  if (!target) return false;
+  if (jobTitle.includes(target)) return true;
+
+  const words = target.split(" ").filter((w) => w.length > 2);
+  return words.length > 0 && words.every((word) => jobTitle.includes(word));
 }
 
 /**

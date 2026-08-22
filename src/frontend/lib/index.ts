@@ -4,7 +4,7 @@ export { landingNavLinks } from './configs/navigation';
 export { isProductionSite } from './configs/site';
 export { countries, countryName, flagUrl } from './configs/countries';
 export type { Country } from './configs/countries';
-export { jobFields, titlesForField, fieldLabel } from './configs/job-titles';
+export { titlesForField, fieldLabel } from './configs/job-titles';
 export type { JobField } from './configs/job-titles';
 
 // STYLES (Fonts, global styles, etc.)

@@ -27,10 +27,51 @@ const EXCLUDED: string[] = ["IL"];
  * In the flag set but not somewhere a person takes a job: supranational and
  * user-assigned codes (EU, XA "Pseudo-Accents" is a CLDR pseudolocale, XB), plus
  * territories with no permanent civilian population.
+ *
+ * Largely moot now that `MARKETS` is an allowlist, but kept so that widening
+ * the allowlist later cannot quietly readmit them.
  */
 const NOT_A_JOB_MARKET: string[] = [
     "EU", "XA", "XB",
     "AQ", "BV", "CP", "DG", "GS", "HM", "TF", "UM",
+];
+
+/**
+ * The only markets Jobak serves: the Arab League, whose members are where our
+ * users actually live.
+ *
+ * This is an allowlist rather than a filter over every country on earth,
+ * because the product is for people in these markets looking for remote work —
+ * either within the region or worldwide. Narrowing it here narrows the whole
+ * chain: the onboarding dropdown, the `regions` table, and the geography the
+ * collectors ask each source about.
+ *
+ * Note this constrains where the *candidate* is, never where the *job* is. A
+ * worldwide remote search is still the common case.
+ */
+const MARKETS: string[] = [
+    "AE", // United Arab Emirates
+    "BH", // Bahrain
+    "DZ", // Algeria
+    "EG", // Egypt
+    "IQ", // Iraq
+    "JO", // Jordan
+    "KM", // Comoros
+    "KW", // Kuwait
+    "LB", // Lebanon
+    "LY", // Libya
+    "MA", // Morocco
+    "MR", // Mauritania
+    "OM", // Oman
+    "PS", // Palestine
+    "QA", // Qatar
+    "SA", // Saudi Arabia
+    "SD", // Sudan
+    "SO", // Somalia
+    "SY", // Syria
+    "TN", // Tunisia
+    "YE", // Yemen
+    "DJ", // Djibouti
 ];
 
 const OUT_FILE = join(process.cwd(), "src/frontend/lib/configs/countries.ts");
@@ -49,6 +90,7 @@ function main() {
         // Subdivision codes (GB-SCT, ES-CT) and user-assigned ranges (XC, XO) are
         // not countries — keep plain ISO 3166-1 alpha-2 only.
         .filter((code) => /^[A-Z]{2}$/.test(code))
+        .filter((code) => MARKETS.includes(code))
         .filter((code) => !EXCLUDED.includes(code) && !NOT_A_JOB_MARKET.includes(code))
         .map((code) => {
             let name: string;
@@ -83,7 +125,9 @@ function main() {
         OUT_FILE,
         `// GENERATED FILE — do not edit by hand.
 // Regenerate with: pnpm scripts → Countries → Regenerate
-// Source: country-flag-icons + Intl.DisplayNames. ${EXCLUDED.join(", ")} excluded by product decision.
+// Source: country-flag-icons + Intl.DisplayNames.
+// Scope: Arab League markets only — see MARKETS in scripts/countries/generate-countries.ts.
+// ${EXCLUDED.join(", ")} excluded by product decision.
 
 export interface Country {
     /** ISO 3166-1 alpha-2. Also the flag filename: /flags/{code}.svg */

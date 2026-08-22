@@ -1,6 +1,7 @@
 export { useOnboardingForm } from "./use-onboarding-form";
 export { useOnboardingStep } from "./use-onboarding-step";
 export { useOnboardingSubmit } from "./use-onboarding-submit";
+export { useMarketingAnswers } from "./use-marketing-answers";
 export { useSkillsManager } from "./use-skills-manager";
 export { useFlagPalette, NEUTRAL_PALETTE } from "./use-flag-palette";
 export type { FlagPalette } from "./use-flag-palette";

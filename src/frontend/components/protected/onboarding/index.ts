@@ -6,6 +6,8 @@ export { StepLocation } from "./step-location";
 export { StepFieldSkills } from "./step-field-skills";
 export { StepJobPreferences } from "./step-job-preferences";
 export { StepApiKey } from "./step-api-key";
+export { StepMarketing } from "./step-marketing";
+export { OnboardingClient } from "./onboarding-client";
 export { ScenePanel } from "./scene-panel";
 export { OptionRow } from "./option-row";
 export { sceneState } from "./scene-state";

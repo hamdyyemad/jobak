@@ -25,6 +25,8 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
   const [activeTab, setActiveTab] = useState<"jobs" | "bookmarks">("jobs");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  /** What the queued search is doing, shown until the next list arrives. */
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
   const router = useRouter();
 
   /*
@@ -82,23 +84,33 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
   }
 
   /*
-   * Asks the matcher to score whatever the collectors have added since last
-   * time. Collection itself runs on its own schedule — this is not a scrape,
-   * so it returns in seconds rather than minutes.
+   * Queues this user's search.
+   *
+   * For a user with an Apify token this is the one and only thing that spends
+   * their credit — it is never scheduled. The endpoint records the request and
+   * answers immediately, so this resolves in a round trip while the collecting
+   * and scoring carry on behind it.
    */
   async function handleRefresh() {
     setIsRefreshing(true);
     setRefreshError(null);
+    setRefreshNotice(null);
     try {
       const res = await fetch("/api/v1/jobs/refresh", { method: "POST" });
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setRefreshError(result.error ?? "Couldn't refresh your matches. Try again in a moment.");
+        setRefreshError(result.error ?? "Couldn't start your search. Try again in a moment.");
         return;
       }
-      // Server component owns the job list, so a router refresh re-reads it
-      // without throwing away scroll position the way a reload does.
+
+      /*
+       * The work is queued, not finished, so say so. Results land in the pool
+       * over the next few minutes and the next refresh picks them up — the
+       * server component owns the list, so this re-reads it without throwing
+       * away scroll position the way a reload does.
+       */
+      setRefreshNotice(result.message ?? "Search running. New roles appear as they land.");
       router.refresh();
     } catch {
       setRefreshError("Couldn't reach the server. Check your connection.");
@@ -165,6 +177,12 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
           {refreshError && (
             <p role="alert" className="mb-4 border-l-2 border-(--status-rose) py-2 pl-4 text-sm text-(--status-rose)">
               {refreshError}
+            </p>
+          )}
+
+          {refreshNotice && !refreshError && (
+            <p role="status" className="mb-4 border-l-2 border-(--status-amber) py-2 pl-4 text-sm text-fg-secondary">
+              {refreshNotice}
             </p>
           )}
 

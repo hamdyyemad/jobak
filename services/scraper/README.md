@@ -42,6 +42,25 @@ expects — the n8n workflow inserts them without a normalizer.
 `meta.sources` reports every source's outcome individually, so a run that lost
 LinkedIn is visibly different from a run where LinkedIn found nothing.
 
+### Geography and freshness
+
+`worldwide: true` means **remote-from-anywhere counts**, not "no filter". A
+listing qualifies two ways and only two:
+
+- it is **remote** — location-independent, so it passes whatever markets were
+  asked for;
+- it is **physically in one of `countries`** — matched against the location
+  text only, on word boundaries, with city aliases (Cairo, Dubai, Riyadh…).
+  The country code counts only as a standalone uppercase token.
+
+Everything else is dropped. Before this rule a worldwide search returned 39%
+on-site roles in Germany, and a two-letter substring match let them through:
+"ger**ma**ny" matched MA and "**so**ftware" matched SO.
+
+`maxAgeDays: 1` keeps only what was posted today. Undated listings still pass —
+several feeds publish "latest N" without dating every row, and dropping those
+would empty whole sources.
+
 ### `GET /api/sources`
 
 The catalogue: every source, its kind, its geography, and whether it is on by

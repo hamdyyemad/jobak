@@ -1,28 +1,25 @@
 "use client";
 
+import { useMemo } from "react";
 import { X } from "lucide-react";
 import { useSkillsManager } from "@/frontend/hooks/protected/onboarding";
 import { OnboardingData } from "@/frontend/types/on-boarding";
 import { Select } from "@/frontend/components/shared/select";
 import { NumberField } from "@/frontend/components/shared/number-field";
-import { jobFields } from "@/frontend/lib/configs/job-titles";
+import type { JobField } from "@/frontend/lib/configs/job-titles";
 import { seniorityFromExperience, seniorityOptions } from "./data";
 import { inputClass, labelClass } from "./styles";
 
 interface StepFieldSkillsProps {
+  catalogue: JobField[];
   field: string;
   skills: string[];
   experience: number;
   onUpdate: (updates: Partial<OnboardingData>) => void;
 }
 
-const fieldOptions = jobFields.map((f) => ({
-  value: f.value,
-  label: f.label,
-  keywords: f.titles.join(" "),
-}));
-
 export function StepFieldSkills({
+  catalogue,
   field,
   skills,
   experience,
@@ -30,6 +27,17 @@ export function StepFieldSkills({
 }: StepFieldSkillsProps) {
   const { skillInput, setSkillInput, addSkill, removeSkill } = useSkillsManager(skills, (newSkills) =>
     onUpdate({ skills: newSkills })
+  );
+
+  /* Titles ride along as keywords so searching "react" finds Software Engineering. */
+  const fieldOptions = useMemo(
+    () =>
+      catalogue.map((f) => ({
+        value: f.value,
+        label: f.label,
+        keywords: f.titles.join(" "),
+      })),
+    [catalogue]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

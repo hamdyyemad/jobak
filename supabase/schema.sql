@@ -301,7 +301,7 @@ CREATE INDEX IF NOT EXISTS idx_matches_user_job ON user_job_matches(user_id, job
 -- answerable without reading n8n's execution list.
 CREATE TABLE IF NOT EXISTS collection_runs (
   id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  collector    TEXT NOT NULL,          -- 'free' | 'apify'
+  collector    TEXT NOT NULL,          -- 'public' | 'private' | 'apify'
   term         TEXT,
   country_code TEXT,
   found        INTEGER DEFAULT 0,      -- returned by the collector
