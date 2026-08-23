@@ -54,9 +54,18 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
   );
 
   const bookmarkedCount = jobs.filter((j) => j.bookmarked).length;
-  const topMatchesCount = jobs.filter((j) => j.score >= 80).length;
-  const avgScore = jobs.length
-    ? Math.round(jobs.reduce((a, j) => a + j.score, 0) / jobs.length)
+
+  /*
+   * Statistics are over *scored* jobs only.
+   *
+   * Unscored jobs used to arrive as score 0 and were averaged in, so the
+   * headline average fell every time the collectors added listings — the
+   * dashboard's own numbers got worse the more jobs it found.
+   */
+  const scored = jobs.filter((j): j is Job & { score: number } => j.score !== null);
+  const topMatchesCount = scored.filter((j) => j.score >= 80).length;
+  const avgScore = scored.length
+    ? Math.round(scored.reduce((total, j) => total + j.score, 0) / scored.length)
     : 0;
   const topSkills = useMemo(() => {
     const freq: Record<string, number> = {};

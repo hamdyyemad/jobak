@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { signOut } from "@/backend/actions/auth";
 import type { JobField } from "@/frontend/lib/configs/job-titles";
 import type { OnboardingProfile } from "@/backend/lib/onboarding-profile";
+import type { ApifyCatalogue } from "@/backend/actions/apify";
 import {
   useOnboardingForm,
   useKeyVerification,
@@ -17,11 +18,13 @@ import {
   StepFieldSkills,
   StepJobPreferences,
   StepApiKey,
+  StepApifyActors,
 } from "@/frontend/components/protected/onboarding";
 import { seniorityFromExperience } from "@/frontend/components/protected/onboarding/data";
 
 interface SettingsClientProps {
   catalogue: JobField[];
+  apifyCatalogue: ApifyCatalogue;
   profile: OnboardingProfile;
   email?: string;
 }
@@ -37,7 +40,8 @@ const TABS: { id: TabId; label: string; blurb: string }[] = [
   {
     id: "credentials",
     label: "Credentials",
-    blurb: "The model key that scores your matches, and the optional Apify token.",
+    blurb:
+      "The model key that scores your matches, the optional Apify token, and which paid sources it runs.",
   },
   { id: "account", label: "Account", blurb: "Your sign-in." },
 ];
@@ -51,7 +55,7 @@ const TABS: { id: TabId; label: string; blurb: string }[] = [
  * What changes here is the framing: everything for a tab on one page, with one
  * Save, instead of one question at a time behind Next.
  */
-export function SettingsClient({ catalogue, profile, email }: SettingsClientProps) {
+export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: SettingsClientProps) {
   const [tab, setTab] = useState<TabId>("matching");
   const { data, updateData } = useOnboardingForm(profile.values);
   const { statusOf, verify, reset } = useKeyVerification();
@@ -192,17 +196,33 @@ export function SettingsClient({ catalogue, profile, email }: SettingsClientProp
           )}
 
           {tab === "credentials" && (
-            <StepApiKey
-              savedProviders={profile.savedProviders}
-              hasSavedApifyKey={profile.hasSavedApifyKey}
-              aiProviders={data.aiProviders}
-              aiKeys={data.aiKeys}
-              apifyKey={data.apifyKey}
-              statusOf={statusOf}
-              onVerify={verify}
-              onResetCheck={reset}
-              onUpdate={edit}
-            />
+            <div className="space-y-12">
+              <StepApiKey
+                savedProviders={profile.savedProviders}
+                hasSavedApifyKey={profile.hasSavedApifyKey}
+                aiProviders={data.aiProviders}
+                aiKeys={data.aiKeys}
+                apifyKey={data.apifyKey}
+                statusOf={statusOf}
+                onVerify={verify}
+                onResetCheck={reset}
+                onUpdate={edit}
+              />
+
+              <Section title="Paid sources">
+                <StepApifyActors
+                  catalogue={apifyCatalogue}
+                  selected={data.apifyActors}
+                  onChange={(apifyActors) => edit({ apifyActors })}
+                  /*
+                   * A token typed just now counts, and so does one already on
+                   * file — the stored value is never sent to the browser, so
+                   * `apifyKey` is blank for a user who has one saved.
+                   */
+                  hasToken={Boolean(data.apifyKey.trim()) || profile.hasSavedApifyKey}
+                />
+              </Section>
+            </div>
           )}
 
           {tab === "account" && (

@@ -366,12 +366,30 @@ BEGIN
       v_worldwide
       OR cardinality(v_countries) = 0
       OR j.job_type = 'remote'                    -- remote is location-agnostic
-      OR j.country_code = ANY(v_countries)
+      /*
+       * Geography is region_id -> regions(id). This used to read
+       * `j.country_code`, a column that has never existed on `jobs`, so the
+       * function could be created and then failed on every call. See
+       * supabase/fix-matching.sql.
+       *
+       * `region_id IS NULL` passes deliberately: it is null on everything the
+       * collector could not attribute, and `getUserJobs` keeps those rows too.
+       * A scorer narrower than the dashboard leaves the user staring at
+       * listings nothing will ever score.
+       */
+      OR j.region_id IS NULL
+      OR EXISTS (
+        SELECT 1 FROM regions r
+        WHERE r.id = j.region_id AND r.country_code = ANY(v_countries)
+      )
     )
     AND (cardinality(v_worktypes) = 0 OR j.job_type = ANY(v_worktypes))
     AND NOT EXISTS (
+      -- `scored_at IS NOT NULL`, not merely "a row exists": bookmarking an
+      -- unscored job creates a match row, and without this a user could
+      -- permanently exclude a job from scoring by starring it.
       SELECT 1 FROM user_job_matches m
-      WHERE m.user_id = p_user_id AND m.job_id = j.id
+      WHERE m.user_id = p_user_id AND m.job_id = j.id AND m.scored_at IS NOT NULL
     )
   ORDER BY j.posted_at_source DESC NULLS LAST, j.scraped_at DESC
   LIMIT p_limit;

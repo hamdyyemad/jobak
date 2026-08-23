@@ -15,6 +15,9 @@ export interface FetchOptions {
     headers?: Record<string, string>;
     /** Per-request cap, independent of the source-wide signal. */
     timeoutMs?: number;
+    /** Defaults to GET. Apify actor runs are the only POSTs this service makes. */
+    method?: "GET" | "POST";
+    body?: string;
 }
 
 /**
@@ -42,12 +45,25 @@ function linkSignals(outer: AbortSignal, timeoutMs?: number): { signal: AbortSig
     };
 }
 
+/**
+ * Removes credentials from a URL before it goes into an error message.
+ *
+ * Apify takes its token as a query parameter, and errors from this service end
+ * up in n8n's execution log and in `collection_runs.detail` — both of which are
+ * places a user's API token must never be written.
+ */
+function redact(url: string): string {
+    return url.replace(/([?&](?:token|api_?key|secret)=)[^&]*/gi, "$1***");
+}
+
 export async function fetchText(url: string, signal: AbortSignal, options: FetchOptions = {}): Promise<string> {
     const { signal: linked, done } = linkSignals(signal, options.timeoutMs);
     try {
         const res = await fetch(url, {
             signal: linked,
             redirect: "follow",
+            method: options.method ?? "GET",
+            body: options.body,
             headers: {
                 "User-Agent": UA,
                 Accept: "*/*",
@@ -55,7 +71,16 @@ export async function fetchText(url: string, signal: AbortSignal, options: Fetch
                 ...options.headers,
             },
         });
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+        if (!res.ok) {
+            /*
+             * The status alone is not enough to act on for Apify: a 402 means
+             * the user is out of credit and a 404 means the actor was renamed,
+             * and those need different messages. The body carries which.
+             */
+            const detail = await res.text().catch(() => "");
+            const hint = detail.slice(0, 200).replace(/\s+/g, " ").trim();
+            throw new Error(`${res.status} ${res.statusText} — ${redact(url)}${hint ? ` — ${hint}` : ""}`);
+        }
         return await res.text();
     } finally {
         done();

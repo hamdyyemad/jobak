@@ -1,6 +1,7 @@
 # jobak-scraper
 
-Job collection for Jobak. Twelve sources behind one endpoint, no per-request cost.
+Job collection for Jobak. Thirteen free sources, seven optional paid ones,
+behind one service.
 
 Built for candidates in MENA, which is the constraint that shapes everything
 here: a listing only counts if someone in Cairo, Riyadh or Casablanca could
@@ -18,9 +19,11 @@ src/
     mena/        wuzzuf, bayt, talent, forasna
     remote/      remoteok, remotive, weworkremotely, himalayas, jobicy, arbeitnow
     ats/         greenhouse, ashby, workable
+    apify/       ApifySource — a paid actor wearing the same clothes
+  apify/         the actor catalogue (the marketplace) + the Apify client
   filters/       remote-eligibility, geography, freshness, relevance
   enrichment/    company links (website → footer → LinkedIn + careers)
-  lib/           http, html, jsonld, normalize, geo
+  lib/           http, html, jsonld, sanitize, normalize, geo
 ```
 
 A source is a class extending `JobSource`, and it supplies exactly two things:
@@ -223,27 +226,128 @@ outbound requests, and because the answer changes on a different clock: a
 company's website changes roughly never, its open roles change hourly. Cache the
 result in `companies` (see `supabase/companies.sql`) and never ask twice.
 
-The chain is tiered by cost, and only the last step can be wrong:
+The chain is tiered by evidence, costs nothing, and only the last step can be
+wrong:
 
 1. **The source already knows** — Wuzzuf gives `website` and `linkedinProfile`
    for every company; a `JobPosting` often gives `hiringOrganization.sameAs`.
 2. **The apply URL is already the company's** — true whenever a company self-
    hosts its board.
-3. **Search** — opt-in, and off unless `BRAVE_SEARCH_API_KEY` is set.
+3. **Wikidata** — the `official website` property (P856). Curated, so when it
+   has an entry it is right; it only knows companies notable enough to have one.
+4. **A verified domain guess** — `acme.com`, `acme.io`, `acme-inc.com`... accepted
+   only if the company's name appears in the page's `<title>` or `og:site_name`.
 
-Step 3 is an API key rather than a scraper on purpose: DuckDuckGo's `robots.txt`
-disallows both `/lite` and `/html`, and Google and Bing disallow their result
-pages outright. Scraping a search engine for this would be the one genuinely
-non-compliant thing in the service.
+Every result carries how it was reached, all the way to
+`companies.resolved_via`, because **step 4 can be confidently wrong**: "Tabby"
+the fintech is `tabby.ai`, but `tabby.com` is a kids' tablet whose title
+contains the word. Filter on `resolved_via` if you need facts rather than leads.
+
+No search engine is involved, and not for want of trying — every one of them is
+closed to this. `duckduckgo.com/robots.txt` disallows `/lite` and `/html`,
+`api.duckduckgo.com` is `Disallow: /` (the Instant Answer API included), and
+Google and Bing disallow their result pages outright. A paid search API would
+work, but the free chain above resolves 11 of 12 companies in a measured run, so
+it is not buying much.
 
 Everything degrades rather than fails — an unresolvable company comes back with
 nulls and `resolvedVia: "none"`, and the caller shows the aggregator link as it
 does today.
 
+### `GET|POST /api/apify`
+
+The paid half of collection: a marketplace of Apify actors, and the runs.
+
+`GET` returns the catalogue the settings page renders. `POST` runs the actors a
+user enabled, with **their** token, and returns jobs in the same shape as
+`/api/scrape`.
+
+```jsonc
+{
+  "apifyToken": "apify_api_...",         // required — this spends the user's credit
+  "query": "Backend Engineer",
+  "countries": ["EG"],
+  "worldwide": false,
+  "actors": ["apify_wuzzuf", "apify_bayt"],  // optional; omit for the defaults
+  "limit": 40
+}
+```
+
+Separate from `/api/scrape` for a reason that is not tidiness: **this endpoint
+spends money.** Keeping it apart makes the rule enforceable rather than
+aspirational — nothing scheduled calls it, only the dashboard's Search button
+and onboarding do, and the token arrives per request instead of sitting in an
+environment variable a cron could reach.
+
+Runs go through `ApifySource`, a `JobSource` like any other, so paid rows get the
+same geography filter, remote-eligibility check, description sanitising and
+**cross-source dedupe** as the free ones. A user running both Bayt actors — or
+Wuzzuf both free and paid — gets one row per job, not three.
+
+| Actor | Default | Cost | Description? |
+|---|---|---|---|
+| `apify_wuzzuf` — Wuzzuf | **on** | per run | no |
+| `apify_bayt` — Bayt | **on** | per run | no |
+| `apify_career_sites` — company career pages | **on** | $0.012/job | **yes, HTML** |
+| `apify_all_jobs` — 39 sites incl. LinkedIn/Indeed | **on** | per run | **yes** |
+| `apify_bayt_memo` — Bayt, detailed | off | $0.0009/result | yes |
+| `apify_wuzzuf_alt` — Wuzzuf, alternative | off | per run | no |
+| `apify_gulftalent` — GulfTalent | off | **$19.89/month rental** | no |
+
+The defaults are the four that do not overlap each other and do not bill a
+subscription. Two things are deliberately loud in the marketplace UI:
+
+- **GulfTalent is a monthly rental, not a per-use charge.** Enabling it by
+  default would silently subscribe every user to something most would not use.
+- **Four of the seven publish no job description.** Those rows reach the scorer
+  as a title and a company name and score accordingly — which reads as the AI
+  being bad rather than the source being thin.
+
+`apify_bayt` matters more than its row suggests: it reaches the site the free
+`bayt` source cannot, because Apify's residential proxies get past the
+Cloudflare fingerprint check that blocks this runtime.
+
+**`scripts/apify-probe.ts` validates every actor's input mapping against its
+published schema without running anything.** That check is not optional — a
+renamed field or a bad enum value fails as an empty run that still bills. It has
+already caught two: `searchPostedWithin: "24h"` and `maxJobAge: "1"`, both
+silently rejected.
+
 ### `GET /api/sources`
 
 The catalogue: every source, its kind, geography, language, and whether it is on
 by default — with the note explaining why, for the ones that are off.
+
+## Descriptions
+
+Descriptions are stored as **sanitised HTML**, not flattened text.
+
+They used to go through `stripHtml`, which turned a posting's headings and
+bullet lists into one unbroken paragraph — and that is what the job drawer
+rendered. Storing the source's markup instead would be an XSS hole, since this
+is arbitrary HTML from a dozen sites we do not control.
+
+So `src/lib/sanitize.ts` reduces every description at collection time to a small
+allowlist — `p br ul ol li strong b em i u h3-h6 blockquote code pre a` — with no
+attributes except a scheme-checked `href`. Plain-text descriptions get their
+structure rebuilt from newlines and `-`/`•` bullets, so the rows already in the
+pool improve too. `truncateHtml` cuts on a tag boundary and closes what is still
+open, because slicing HTML at a byte count can leave markup that swallows the
+rest of the page.
+
+The app sanitises again before rendering. That is not belt-and-braces for its
+own sake: rows collected before this existed, and the n8n workflows, make no
+such promise.
+
+`scripts/sanitize-probe.ts` is the check — script tags, event handlers,
+`javascript:`/`data:` hrefs, `java\nscript:` evasion, SVG payloads. Run it after
+any change to the allowlist.
+
+**It is a hand-rolled allowlist, not DOMPurify.** That is a deliberate trade for
+a zero-dependency service, and the probe exists because hand-rolled sanitisers
+are historically where bypasses live — it already caught the sanitiser escaping
+its own output. If you would rather not carry that risk, run the app-side pass
+through `dompurify` in the client component instead.
 
 ## Wiring it up
 
@@ -262,8 +366,9 @@ A **separate Vercel project** from the main app, pointed at this directory:
 
 1. New Project → same repository → **Root Directory: `services/scraper`**
 2. Framework preset: **Other** (the `api/` folder is picked up automatically)
-3. Environment variables: `SCRAPER_SECRET` (required),
-   `BRAVE_SEARCH_API_KEY` (optional) — see `.env.example`
+3. Environment variable: `SCRAPER_SECRET` — the only one. See `.env.example`.
+   Apify tokens arrive per request because they belong to the user, not the
+   deployment, and company enrichment resolves websites for free.
 
 Separate so a slow or blocked source can never consume the user-facing app's
 function budget, and so this can be redeployed without touching Jobak.
@@ -325,6 +430,8 @@ npx tsx scripts/probe.ts                      # every source, live, worldwide re
 SCENARIO=mena npx tsx scripts/probe.ts        # Egypt + Saudi + UAE
 npx tsx scripts/probe.ts wuzzuf talent        # just these
 npx tsx scripts/enrich-probe.ts               # the company-link chain
+npx tsx scripts/sanitize-probe.ts             # description sanitiser, incl. XSS vectors
+npx tsx scripts/apify-probe.ts                # actor inputs vs published schemas (free)
 ```
 
 `probe.ts` is the check that matters. These sources depend on contracts living

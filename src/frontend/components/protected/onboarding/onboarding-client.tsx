@@ -11,6 +11,7 @@ import {
 } from "@/frontend/hooks/protected/onboarding";
 import type { JobField } from "@/frontend/lib/configs/job-titles";
 import type { OnboardingProfile } from "@/backend/lib/onboarding-profile";
+import type { ApifyCatalogue } from "@/backend/actions/apify";
 import { fieldLabel } from "@/frontend/lib/configs/job-titles";
 import {
   OnboardingHeader,
@@ -22,6 +23,7 @@ import {
   StepFieldSkills,
   StepJobPreferences,
   StepApiKey,
+  StepApifyActors,
   StepMarketing,
   sceneState,
   validateStep,
@@ -36,13 +38,14 @@ import {
 const TRAVEL = 24;
 
 interface OnboardingClientProps {
+  apifyCatalogue: ApifyCatalogue;
   /** Read from `job_fields` / `job_titles` by the server component above. */
   catalogue: JobField[];
   /** The saved profile when this is Settings; null on first onboarding. */
   profile: OnboardingProfile | null;
 }
 
-export function OnboardingClient({ catalogue, profile }: OnboardingClientProps) {
+export function OnboardingClient({ catalogue, apifyCatalogue, profile }: OnboardingClientProps) {
   /*
    * Editing rather than onboarding changes three things: the form opens
    * prefilled, a key already on file counts as satisfying the gate, and the
@@ -207,17 +210,41 @@ export function OnboardingClient({ catalogue, profile }: OnboardingClientProps) 
             )}
 
             {step === 5 && (
-              <StepApiKey
-                savedProviders={savedProviders}
-                hasSavedApifyKey={profile?.hasSavedApifyKey ?? false}
-                aiProviders={data.aiProviders}
-                aiKeys={data.aiKeys}
-                apifyKey={data.apifyKey}
-                statusOf={statusOf}
-                onVerify={verify}
-                onResetCheck={reset}
-                onUpdate={updateData}
-              />
+              <div className="space-y-10">
+                <StepApiKey
+                  savedProviders={savedProviders}
+                  hasSavedApifyKey={profile?.hasSavedApifyKey ?? false}
+                  aiProviders={data.aiProviders}
+                  aiKeys={data.aiKeys}
+                  apifyKey={data.apifyKey}
+                  statusOf={statusOf}
+                  onVerify={verify}
+                  onResetCheck={reset}
+                  onUpdate={updateData}
+                />
+
+                {/*
+                  Shown here rather than as a step of its own: it only matters
+                  once there is a token, it has sensible defaults, and adding a
+                  seventh step to onboarding for an optional choice is how you
+                  lose people before they finish.
+                */}
+                <div>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-fg-quaternary">
+                    Paid sources
+                  </p>
+                  <div className="mt-4">
+                    <StepApifyActors
+                      catalogue={apifyCatalogue}
+                      selected={data.apifyActors}
+                      onChange={(apifyActors) => updateData({ apifyActors })}
+                      hasToken={
+                        Boolean(data.apifyKey.trim()) || (profile?.hasSavedApifyKey ?? false)
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
             )}
 
             {/*
