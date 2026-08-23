@@ -1,0 +1,356 @@
+{
+  "name": "Jobak — Post jobs to LinkedIn",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "every-6-hours",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────\n// EDIT THESE BEFORE ACTIVATING\n// ─────────────────────────────────────────────────────────────\nconst APP_URL      = 'https://YOUR-APP.vercel.app';   // public site, for the job links\nconst SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';\nconst SUPABASE_KEY = 'YOUR_SERVICE_ROLE_KEY';\n\n// LinkedIn posting, via the Community Management API.\n//\n// AUTHOR is the *organization* URN of the Jobak page, not a person:\n//   urn:li:organization:12345678\n// Find the id in the page admin URL, or GET /v2/organizationAcls?q=roleAssignee\n//\n// TOKEN needs the `w_organization_social` scope and comes from an app with the\n// Community Management API product approved. It is a 60-day token — when posts\n// stop appearing, this is the first thing to check.\nconst LINKEDIN_AUTHOR = 'urn:li:organization:YOUR_ORG_ID';\nconst LINKEDIN_TOKEN  = 'YOUR_LINKEDIN_ACCESS_TOKEN';\n\n// How many jobs to post per run. One is deliberate: the cursor rotates roles,\n// so one post per run over several runs a day reads as a curated feed rather\n// than a dump.\nconst POSTS_PER_RUN = 1;\n\n// Only post listings collected within this window. An older job is more likely\n// to be filled already, and posting filled roles is how a feed loses trust.\nconst MAX_AGE_DAYS = 14;\n\n// Set false for a dry run: everything happens except the LinkedIn call and the\n// mark-as-posted. Use it once before activating.\nconst LIVE = true;\n\nreturn { json: {\n  appUrl: APP_URL, supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY,\n  linkedinAuthor: LINKEDIN_AUTHOR, linkedinToken: LINKEDIN_TOKEN,\n  postsPerRun: POSTS_PER_RUN, maxAgeDays: MAX_AGE_DAYS, live: LIVE\n} };"
+      },
+      "id": "set-config",
+      "name": "Set Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.supabaseUrl }}/rest/v1/rpc/next_linkedin_posts",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $('Set Config').first().json.supabaseKey, 'Authorization': 'Bearer ' + $('Set Config').first().json.supabaseKey, 'Content-Type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_batch: $('Set Config').first().json.postsPerRun, p_max_age_days: $('Set Config').first().json.maxAgeDays }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "next-posts",
+      "name": "Next Jobs To Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Unpacks what next_linkedin_posts() selected.\n//\n// That function walks the role catalogue from a cursor and returns the newest\n// unposted job for each role it can fill, so consecutive runs post a backend\n// role, then a designer role, then a data role — rather than ten backend roles\n// the day a backend-heavy collection lands.\n//\n// It deliberately does NOT mark anything posted. That happens after LinkedIn\n// accepts, in `Mark Posted` — a queue that marks on selection silently loses a\n// listing every time a post fails.\nconst payload = $input.first().json;\nconst rows = Array.isArray(payload) ? payload : (payload.body || []);\n\nif (!Array.isArray(rows) || rows.length === 0) {\n  console.log('Nothing to post: no unposted job matched any role in the rotation.');\n  return [];\n}\n\nconsole.log('Selected ' + rows.length + ' job(s) to post');\nreturn rows.map(j => ({ json: j }));"
+      },
+      "id": "split-jobs",
+      "name": "Split Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "post-loop",
+      "name": "Post Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the post text and the LinkedIn payload.\n//\n// The link is a Jobak page, not the source's apply URL, for three reasons: it\n// renders an Open Graph preview card we control, it works for someone with no\n// account, and it is the only way to know the post did anything.\nconst cfg = $('Set Config').first().json;\nconst j = $input.item.json;\n\nconst slug = j.public_slug;\nif (!slug) {\n  // Every row gets a slug from a trigger, so this means the migration in\n  // supabase/public-jobs.sql has not been applied.\n  throw new Error('Job ' + j.id + ' has no public_slug — run supabase/public-jobs.sql');\n}\n\nconst url = cfg.appUrl.replace(/\\/$/, '') + '/jobs/' + slug;\n\nconst WORKPLACE = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };\nconst place = [j.location, WORKPLACE[j.job_type]].filter(Boolean).join(' · ');\n\n// Hashtags from the job's own tech stack, plus two constants. Capped at five:\n// LinkedIn stops rewarding them well before that and a wall of tags reads as\n// spam.\nconst tagWords = Array.isArray(j.tech_stack) ? j.tech_stack.slice(0, 3) : [];\nconst hashtags = tagWords\n  .map(t => '#' + String(t).replace(/[^a-zA-Z0-9]/g, ''))\n  .filter(t => t.length > 2)\n  .concat(['#hiring', '#jobs'])\n  .join(' ');\n\nconst lines = [\n  j.title + ' — ' + (j.company || 'Confidential'),\n  '',\n  place,\n];\nif (j.salary_text) lines.push('💰 ' + j.salary_text);\nlines.push('', 'Details and apply 👇', url, '', hashtags);\n\nconst text = lines.join('\\n');\n\n/*\n * LinkedIn's /rest/posts format. `commentary` carries the text and\n * `content.article` is what makes the preview card render — without it the URL\n * appears as a bare string and engagement collapses.\n */\nconst body = {\n  author: cfg.linkedinAuthor,\n  commentary: text,\n  visibility: 'PUBLIC',\n  distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },\n  content: {\n    article: {\n      source: url,\n      title: (j.title + ' at ' + (j.company || 'Confidential')).substring(0, 100),\n      description: (place || 'New opening').substring(0, 250)\n    }\n  },\n  lifecycleState: 'PUBLISHED',\n  isReshareDisabledByAuthor: false\n};\n\nreturn { json: { jobId: j.id, title: j.title, url, text, body, live: cfg.live } };"
+      },
+      "id": "build-post",
+      "name": "Build Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/rest/posts",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'Authorization': 'Bearer ' + $('Set Config').first().json.linkedinToken, 'Content-Type': 'application/json', 'X-Restli-Protocol-Version': '2.0.0', 'LinkedIn-Version': '202506' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "post-linkedin",
+      "name": "Post To LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1660,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Honours the dry-run switch, and normalises both paths to one shape.\n//\n// A dry run is not a nicety here: the first live post goes to a real company\n// page, and an author URN or token that is wrong should be found before it is\n// found publicly.\nconst cfg = $('Set Config').first().json;\nconst req = $('Build Post').item.json;\n\nif (!cfg.live) {\n  console.log('DRY RUN — would post:\\n' + req.text);\n  return { json: { ...req, posted: false, dryRun: true, postUrn: null } };\n}\n\nconst res = $input.item.json;\n// The post URN comes back in the `x-restli-id` header; the body is empty on\n// success, so a 2xx with no id still counts as posted.\nconst headers = res.headers || {};\nconst urn = headers['x-restli-id'] || headers['X-RestLi-Id'] || null;\nconst status = res.statusCode || res.status || 0;\nconst ok = status >= 200 && status < 300;\n\nif (!ok) {\n  console.log('LinkedIn refused the post (' + status + '): ' + JSON.stringify(res.body || res).substring(0, 400));\n}\n\nreturn { json: { ...req, posted: ok, dryRun: false, postUrn: urn, status } };"
+      },
+      "id": "read-result",
+      "name": "Read Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1880,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Marks the job posted — only when LinkedIn actually accepted it.\n//\n// Returning [] on failure stops the branch, so the job stays unposted and the\n// next run picks it up again. That is the whole reason selection and marking\n// are separate steps.\nconst j = $input.item.json;\n\nif (!j.posted) {\n  console.log((j.dryRun ? 'Dry run' : 'Post failed') + ' — leaving \"' + j.title + '\" unposted.');\n  return [];\n}\n\nconsole.log('Posted: ' + j.title + ' -> ' + j.url);\nreturn { json: { p_job_id: j.jobId, p_post_url: j.postUrn ? ('https://www.linkedin.com/feed/update/' + j.postUrn) : null } };"
+      },
+      "id": "build-mark",
+      "name": "Build Mark",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Set Config').first().json.supabaseUrl }}/rest/v1/rpc/mark_linkedin_posted",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'apikey': $('Set Config').first().json.supabaseKey, 'Authorization': 'Bearer ' + $('Set Config').first().json.supabaseKey, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "mark-posted",
+      "name": "Mark Posted",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "width": 460,
+        "height": 300,
+        "content": "## What this is\n\nPosts one collected job to the Jobak LinkedIn page, a few times a day.\n\n**The selection rule** is in `next_linkedin_posts()` (supabase/public-jobs.sql): a cursor walks the job-title catalogue and each run takes the **newest unposted** job for the next role in the rotation.\n\nThat gives variety across roles and recency within one — posting \"the newest job\" every time would post ten backend roles in a row whenever a backend-heavy collection lands."
+      },
+      "id": "note-what",
+      "name": "Note — What this is",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        320,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "width": 420,
+        "height": 300,
+        "content": "## Before activating\n\n1. Run `supabase/public-jobs.sql`.\n2. Fill in `Set Config` — app URL, Supabase service key, LinkedIn org URN and token.\n3. **Leave `LIVE = false` and execute once.** The log prints the exact post text without publishing anything.\n4. Check the link preview by pasting a `/jobs/...` URL into LinkedIn's Post Inspector.\n5. Set `LIVE = true` and activate.\n\nThe token is a 60-day one. When posts stop, check that first."
+      },
+      "id": "note-setup",
+      "name": "Note — Before activating",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "width": 440,
+        "height": 260,
+        "content": "## Why marking is a separate step\n\n`next_linkedin_posts()` selects but never marks. `Mark Posted` runs **only** after LinkedIn returns 2xx.\n\nA queue that marks on selection loses a listing every time a post fails — the job is flagged posted and never tried again, and nobody notices because the feed just has a gap.\n\nOn failure this branch returns `[]`, the job stays unposted, and the next run picks it up."
+      },
+      "id": "note-marking",
+      "name": "Note — Why marking is separate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1900,
+        640
+      ]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Config": {
+      "main": [
+        [
+          {
+            "node": "Next Jobs To Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Jobs To Post": {
+      "main": [
+        [
+          {
+            "node": "Split Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Jobs": {
+      "main": [
+        [
+          {
+            "node": "Post Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Loop": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Build Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Post": {
+      "main": [
+        [
+          {
+            "node": "Post To LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post To LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Read Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Result": {
+      "main": [
+        [
+          {
+            "node": "Build Mark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Mark": {
+      "main": [
+        [
+          {
+            "node": "Mark Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Posted": {
+      "main": [
+        [
+          {
+            "node": "Post Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

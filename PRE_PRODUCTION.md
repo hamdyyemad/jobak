@@ -249,7 +249,15 @@ the dashboard reads. Four workflows in `n8n/`, replacing the single
          never called.
       7. `supabase/companies.sql` — company links cache + `jobs.company_id`
       8. `supabase/apify-marketplace.sql` — `user_preferences.apify_actors`
-      9. `UPDATE collection_cursor SET position = 0 WHERE id = 1;`
+      9. `supabase/public-jobs.sql` — public job pages, `is_linkedin_posted`,
+         the posting cursor and `next_linkedin_posts()`. **Widens `jobs` and
+         `companies` to anonymous read** — that is the point of the public
+         pages, and `user_job_matches` stays private.
+      10. `supabase/public-profiles.sql` — the opt-in talent directory. Read the
+          header before running it: it is the one file that deliberately opens a
+          public read path, and the `public_talent` view is the security
+          boundary.
+      11. `UPDATE collection_cursor SET position = 0 WHERE id = 1;`
 
       The app degrades rather than breaks before 6-8 are applied: the dashboard
       falls back to the old columns, and Settings still loads. Apify actor

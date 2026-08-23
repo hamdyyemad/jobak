@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutDashboard, Bookmark, Settings, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Bookmark, Settings, LogOut, UserRound, ChevronLeft, ChevronRight } from "lucide-react";
 import { signOut } from "@/backend/actions/auth";
 import { JobakLogo } from "@/frontend/components/shared/jobak-logo";
 
@@ -63,6 +63,14 @@ export function Sidebar({ collapsed, onToggle, activeTab, onTabChange, bookmarke
 
       {/* Footer */}
       <div className="py-3 px-2 border-t border-border-subtle space-y-0.5 shrink-0">
+        <Link
+          href="/dashboard/profile"
+          title={collapsed ? "Public profile" : undefined}
+          className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-(--fg-tertiary) hover:text-(--fg-primary) hover:bg-white/4 transition-all whitespace-nowrap overflow-hidden"
+        >
+          <UserRound className="w-[18px] h-[18px] shrink-0" />
+          {!collapsed && <span>Public profile</span>}
+        </Link>
         <Link
           href="/settings"
           title={collapsed ? "Settings" : undefined}
