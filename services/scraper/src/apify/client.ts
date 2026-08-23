@@ -51,6 +51,14 @@ export async function runActorSync(options: ApifyRunOptions): Promise<Record<str
         headers: { "Content-Type": "application/json" },
         method: "POST",
         body: JSON.stringify(options.input),
+        /*
+         * Apify is an API we are a paying client of, not a site we crawl, and
+         * its robots.txt governs its website rather than its API. Running the
+         * crawl gates here would add a robots fetch to every actor run for no
+         * benefit — and the throttle would misread a long actor run as the host
+         * being slow and start pacing us.
+         */
+        skipRobots: true,
         // A little past the actor's own timeout, so Apify aborts the run and
         // answers rather than us giving up on a run that is still billing.
         timeoutMs: (options.timeoutSecs + 8) * 1000,
@@ -63,7 +71,10 @@ export async function runActorSync(options: ApifyRunOptions): Promise<Record<str
 /** Whether a token is real, without spending anything. */
 export async function verifyToken(token: string, signal: AbortSignal): Promise<boolean> {
     try {
-        await fetchJson(`${API}/users/me?token=${encodeURIComponent(token)}`, signal, { timeoutMs: 6_000 });
+        await fetchJson(`${API}/users/me?token=${encodeURIComponent(token)}`, signal, {
+            timeoutMs: 6_000,
+            skipRobots: true,
+        });
         return true;
     } catch {
         return false;

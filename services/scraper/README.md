@@ -23,7 +23,7 @@ src/
   apify/         the actor catalogue (the marketplace) + the Apify client
   filters/       remote-eligibility, geography, freshness, relevance
   enrichment/    company links (website → footer → LinkedIn + careers)
-  lib/           http, html, jsonld, sanitize, normalize, geo
+  lib/           http, robots, throttle, sitemap, html, jsonld, sanitize, normalize, geo
 ```
 
 A source is a class extending `JobSource`, and it supplies exactly two things:
@@ -37,8 +37,8 @@ same way for every source and cannot be half-implemented by a new one.
 
 | Strategy | For | Used by |
 |---|---|---|
-| `JsonFeedStrategy` | a public JSON feed | remoteok, remotive, jobicy, himalayas, arbeitnow |
-| `RssFeedStrategy` | an RSS feed, parsed into tag maps | weworkremotely |
+| `JsonFeedStrategy` | a public JSON feed | remoteok, jobicy, himalayas, arbeitnow |
+| `RssFeedStrategy` | an RSS feed, parsed into tag maps | weworkremotely, remotive |
 | `DetailPageStrategy` | discover URLs, fan out, read structured data | wuzzuf, bayt, talent |
 | `HtmlCardStrategy` | one listing page, many cards | forasna |
 | `AtsStrategy` | per-company JSON boards | greenhouse, ashby, workable |
@@ -104,7 +104,7 @@ several feeds publish "latest N" without dating every row.
 | `talent` | detail | 12 MENA subdomains | on | Aggregator; full `JobPosting` per detail page |
 | `forasna` | html | EG (Arabic) | **off** | `Crawl-delay: 10`; blue-collar pool — see below |
 | `remoteok` | api | remote-only | on | ~100 latest |
-| `remotive` | api | remote-only | on | States a real hiring window |
+| `remotive` | rss | remote-only | on | States a real hiring window. Its JSON API is `Disallow: /api/*` |
 | `weworkremotely` | rss | remote-only | on | `<region>` is a real hiring window |
 | `himalayas` | api | remote-only | on | `locationRestrictions` is a real hiring window |
 | `jobicy` | api | remote-only | on | `?count=` works; `?tag=` does not |
@@ -130,9 +130,14 @@ translations — and, in the linked `company` entity, `website` and
 `linkedinProfile`. One page also carries ~17 postings, so the fan-out is far
 cheaper than one request per job.
 
-Discovery is `sitemap-job-1.xml` (~5,600 URLs in one request), whose slugs carry
-the title, company and country in plain text — enough to narrow to the search
-before spending a request.
+Discovery starts at `sitemap.xml` and descends into every `sitemap-*-job-N.xml`
+shard it lists (~5,600 URLs across two files today). The slugs carry the title,
+company and country in plain text — enough to narrow to the search before
+spending a request on a page.
+
+It used to name `sitemap-job-1.xml` directly. That `-1` is Wuzzuf saying it
+intends to shard, and the day it adds a `-2` the hardcoded version would have
+kept working while silently returning half the market.
 
 ### Bayt is off, and it is not the parser
 
@@ -288,13 +293,14 @@ Wuzzuf both free and paid — gets one row per job, not three.
 |---|---|---|---|
 | `apify_wuzzuf` — Wuzzuf | **on** | per run | no |
 | `apify_bayt` — Bayt | **on** | per run | no |
+| `apify_linkedin` — LinkedIn | **on** | $0.0004/result | **yes** |
 | `apify_career_sites` — company career pages | **on** | $0.012/job | **yes, HTML** |
 | `apify_all_jobs` — 39 sites incl. LinkedIn/Indeed | **on** | per run | **yes** |
 | `apify_bayt_memo` — Bayt, detailed | off | $0.0009/result | yes |
 | `apify_wuzzuf_alt` — Wuzzuf, alternative | off | per run | no |
 | `apify_gulftalent` — GulfTalent | off | **$19.89/month rental** | no |
 
-The defaults are the four that do not overlap each other and do not bill a
+The defaults are the five that do not overlap each other and do not bill a
 subscription. Two things are deliberately loud in the marketplace UI:
 
 - **GulfTalent is a monthly rental, not a per-use charge.** Enabling it by
@@ -307,11 +313,61 @@ subscription. Two things are deliberately loud in the marketplace UI:
 `bayt` source cannot, because Apify's residential proxies get past the
 Cloudflare fingerprint check that blocks this runtime.
 
+Actors declare their *input* schema and almost none declare their **output**,
+so the field names in `mapRow` come from documentation rather than a contract.
+When one is renamed, every row maps to an empty title and the source reports a
+confident zero — while still billing. `ApifySource` counts unreadable rows and
+reports the field names it actually saw, so that surfaces in `meta.actors` as a
+named problem instead of an empty market.
+
 **`scripts/apify-probe.ts` validates every actor's input mapping against its
 published schema without running anything.** That check is not optional — a
 renamed field or a bad enum value fails as an empty run that still bills. It has
 already caught two: `searchPostedWithin: "24h"` and `maxJobAge: "1"`, both
 silently rejected.
+
+### LinkedIn
+
+**There is no direct LinkedIn scraper here, and there will not be one.**
+
+`linkedin.com/robots.txt` is, in its entirety for anyone unlisted:
+
+```
+User-agent: *
+Disallow: /
+```
+
+Followed by an address to write to for whitelisting. That covers `/jobs/view/`,
+`/jobs/search`, the `/jobs-guest/` API and company pages alike. The robots gate
+in `lib/http.ts` enforces it without needing to be told — a source that tried
+would get `RobotsDisallowed` before a request left the process. That is the
+system working, not a gap to route around.
+
+The other two blockers are independent of the first, and each is sufficient on
+its own:
+
+- **A real LinkedIn scraper needs the user's LinkedIn password.** The
+  Playwright libraries that do this drive a logged-in session; a saved session
+  is the account. Storing that is a different risk class from an Apify token —
+  a token buys compute, a password is the user's professional identity, their
+  messages and their network.
+- **Automated access from a logged-in account is what LinkedIn detects and acts
+  on**, and the account it restricts is the user's own. Getting someone banned
+  from LinkedIn while helping them find a job is worse than not finding them
+  the job.
+
+`hiQ v. LinkedIn` is sometimes cited as settling this. It held that scraping
+*public* pages is not a CFAA violation; hiQ still lost on breach of contract.
+None of it licenses authenticated scraping.
+
+**So LinkedIn comes in through Apify** — `apify_linkedin`, on by default.
+Apify's actors run through residential infrastructure and Apify carries that
+relationship; the user pays with their own token. It is the cheapest actor in
+the catalogue at $0.0004 a result, roughly four cents for a hundred jobs.
+
+Note for anyone reading the old n8n workflow: it hardcoded
+`bebity/linkedin-jobs-scraper`, which is a **$29.99/month rental**. For the
+volumes this product runs, the actor above costs cents.
 
 ### `GET /api/sources`
 
@@ -375,11 +431,11 @@ function budget, and so this can be redeployed without touching Jobak.
 
 ## What this does not solve
 
-**LinkedIn and Indeed want residential IPs.** The guest-endpoint LinkedIn source
-has been removed: it answered a home connection and refused Vercel's, so it
-contributed nothing from production while costing a full timeout on every run. A
-source that reliably returns zero is worse than no source, because it looks like
-coverage. Apify remains the honest answer for those two.
+**LinkedIn and Indeed are Apify-only.** The guest-endpoint LinkedIn source was
+removed for two reasons: it answered a home connection and refused Vercel's, and
+`linkedin.com/robots.txt` is `Disallow: /` regardless — the robots gate would
+refuse it now anyway. See the LinkedIn section above. Apify is the honest answer
+for both sites, and `apify_linkedin` is on by default.
 
 **Cloudflare fingerprints the client, not the request.** Bayt is the case study;
 see above. Nothing in the header-tweaking family fixes it.
@@ -394,30 +450,100 @@ engines, which is server-rendered by necessity.
 support server-side search, so the query is applied here against a few hundred
 recent postings.
 
-## Compliance
+## Compliance, enforced
 
-Every source is fetched from a path its `robots.txt` allows for `User-agent: *`,
-checked at the time of writing:
+Every outbound request passes two gates in `lib/http.ts` before it is sent.
+Both are ports of ideas from [Scrapling](https://github.com/D4Vinci/Scrapling)'s
+crawler, adapted to a latency-bounded serverless function.
 
-- **Wuzzuf** and **Forasna** publish `Content-Signal: search=yes, ai-train=no,
-  use=reference` and `Allow: /`. Wuzzuf disallows `/*?q=` and filter URLs; the
-  sitemap and `/jobs/p/` detail pages used here are not covered. Forasna asks
-  for `Crawl-delay: 10`, honoured by making one request per run.
-- **Bayt** disallows `/en/jobs/*-jobs/`; the country-scoped `/en/{country}/jobs/`
-  paths used here are a different prefix and are not covered.
-- **Talent.com** disallows `/services/api-new/search`, `/search-jobs/*`,
-  `/redirect*` and `/ajax/*`; `/jobs` and `/view` are not covered.
+**robots.txt** (`lib/robots.ts`) — a minimal RFC 9309 parser: wildcard-group
+rules, `*` and `$` patterns, longest-match precedence with `Allow` winning ties.
+Fetched once per host per warm instance, and **fail-open** — a robots.txt that
+404s or times out means "no rules stated", never "stop collecting".
 
-Two things worth deciding deliberately rather than inheriting:
+Only the `User-agent: *` group is read. This service sends a browser
+user-agent rather than claiming a product token, so the wildcard group is the
+one that binds it; reading a more permissive named group would be helping
+ourselves to someone else's allowance.
+
+**Crawl-delay and adaptive throttling** (`lib/throttle.ts`) — a port of
+Scrapling's `AutoThrottle`, with the starting delay changed from 5 seconds to
+**zero**. A crawler can afford to open politely and speed up; a function with an
+18-second budget cannot. So it starts at full speed and only ever slows down on
+evidence: a `Crawl-delay` directive, a `Retry-After` header, a 429/403/503, or a
+transport failure. Delay converges on `latency / targetConcurrency`, so a slow
+host is given room and a fast one is not.
+
+It also never sleeps past its budget — a wait longer than the caller's
+`maxWaitMs` is reported as `ThrottledOut` rather than spending time the source
+does not have.
+
+### Turning it on found two violations we had been committing
+
+The previous version of this section was a hand-audit, written once and true
+once. Enforcing it surfaced both of these on the first run:
+
+- **`remotive.com/api/remote-jobs` is `Disallow: /api/*`.** That source had been
+  fetching it every run since it was written. It now reads
+  `/remote-jobs/feed`, which is not disallowed — and is the better source
+  anyway: dedicated `<company>`, `<location>` and `<type>` elements plus a full
+  HTML description, where the API returned one flat blob. The cost is 20 recent
+  postings instead of the whole feed.
+- **Wikidata disallows `/w/`**, which is where `api.php` lives — the search step
+  the company-enrichment resolver depended on. The resolver is gone.
+  `query.wikidata.org` disallows `/sparql` too. Dropping it cost nothing
+  measurable: the domain guesser resolves the same well-known companies, and
+  enrichment still lands 11 of 12.
+
+`scripts/robots-probe.ts` checks every URL this service requests against the
+live rules and fails on an unexpected verdict. Both violations above are kept in
+it as `deny` expectations, so reaching for those endpoints again fails the
+probe.
+
+Two things remain deliberate rather than enforced:
 
 - This service sends a **Chrome user-agent**, as the code it replaces did. It is
-  a bot, and a bot identifying itself as Chrome is a choice, not an accident.
+  a bot, and a bot identifying itself as Chrome is a choice.
 - Wuzzuf and Forasna both `Disallow: /` for **ClaudeBot, GPTBot, CCBot and
   Google-Extended**, and signal `ai-train=no`. Collecting for search and
   reference is what they permit; the descriptions collected here are later sent
-  to an LLM for **scoring**, which is retrieval, not training. That is not
-  restricted by their signal, but it is close enough to the line to be a
-  conscious call.
+  to an LLM for **scoring**, which is retrieval, not training. Not restricted by
+  their signal, but close enough to the line to be a conscious call.
+
+## What was taken from Scrapling, and what was not
+
+[Scrapling](https://github.com/D4Vinci/Scrapling) is a Python scraping
+framework. It is not a dependency here and could not be — this service is
+zero-dependency TypeScript on serverless with no browser — so what follows are
+ports of ideas, credited.
+
+**Taken:**
+
+| From Scrapling | Here | Why it fit |
+|---|---|---|
+| `spiders/throttle.py` — `AutoThrottle` | `lib/throttle.ts` | Repeated probing made three feeds fail at once with `fetch failed`, then recover unaided. That is rate limiting, and nothing here had a concept of it. |
+| `spiders/robotstxt.py` — robots gating | `lib/robots.ts` | Turned a hand-audited README section into something that fails loudly. Found two live violations immediately. |
+| `spiders/templates/sitemap.py` — recursive index descent | `lib/sitemap.ts` | Wuzzuf discovery named `sitemap-job-1.xml` directly. The `-1` is Wuzzuf saying it intends to shard; a `-2` would have halved coverage with no error. |
+
+**Not taken, and why:**
+
+**AutoMatch / adaptive selectors** — Scrapling's headline feature. It
+fingerprints an element (tag, attributes, text, DOM path, parent, siblings) and,
+when a selector later fails, re-finds it by scoring every candidate for
+similarity. Genuinely clever, and a poor fit here: it needs a real DOM tree and
+per-element storage, and it solves "my CSS selector broke" — a problem this
+service designs around rather than manages. The parsers deliberately target
+structured data that sites maintain for search engines: JSON-LD `JobPosting`,
+sitemaps, hydration stores, JSON feeds. Only `forasna.ts` parses cards, and it
+is off by default.
+
+**`curl_cffi` TLS impersonation** — this is what would unblock Bayt, and it is
+the one thing worth wanting. It is a Python C-extension with no Node equivalent
+that runs on Vercel. Tested rather than assumed: `node:https` with Chrome's
+cipher order, `X25519:P-256:P-384` curves and a full browser header set still
+gets **403 on every Bayt URL**. Cloudflare's check reads TLS extension order and
+the HTTP/2 SETTINGS fingerprint, which Node does not expose. Bayt stays off, and
+`apify_bayt` remains the way in.
 
 ## Working on it
 
@@ -432,6 +558,7 @@ npx tsx scripts/probe.ts wuzzuf talent        # just these
 npx tsx scripts/enrich-probe.ts               # the company-link chain
 npx tsx scripts/sanitize-probe.ts             # description sanitiser, incl. XSS vectors
 npx tsx scripts/apify-probe.ts                # actor inputs vs published schemas (free)
+npx tsx scripts/robots-probe.ts               # every URL we fetch vs the live robots.txt
 ```
 
 `probe.ts` is the check that matters. These sources depend on contracts living

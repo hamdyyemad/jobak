@@ -31,6 +31,6 @@ COMMENT ON COLUMN user_preferences.apify_actors IS
  * token are left alone — nothing will run for them either way.
  */
 UPDATE user_preferences
-SET apify_actors = ARRAY['apify_wuzzuf', 'apify_bayt', 'apify_career_sites', 'apify_all_jobs']
+SET apify_actors = ARRAY['apify_wuzzuf', 'apify_bayt', 'apify_linkedin', 'apify_career_sites', 'apify_all_jobs']
 WHERE apify_key_encrypted IS NOT NULL
   AND (apify_actors IS NULL OR cardinality(apify_actors) = 0);

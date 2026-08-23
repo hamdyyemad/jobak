@@ -269,6 +269,61 @@ const GULFTALENT_LOCATIONS: Record<string, string> = {
     JO: "Jordan", LB: "Lebanon", OM: "Oman", KW: "Kuwait",
 };
 
+const linkedin: ApifyActorSpec = {
+    key: "apify_linkedin",
+    actorId: "RIGGeqD6RqKmlVoQU",
+    slug: "valig/linkedin-jobs-scraper",
+    label: "LinkedIn (Apify)",
+    summary: "LinkedIn job search with real filters, run through Apify. The only lawful route to LinkedIn here.",
+    countries: null,
+    language: "en",
+    pricing: { model: "per-result", note: "$0.0004 per result - about $0.04 for 100 jobs. The cheapest actor in this list." },
+    hasDescription: true,
+    // On: LinkedIn is where MENA professional hiring actually advertises, it is
+    // the cheapest actor here, and `apify_all_jobs` only reaches it as one of
+    // 39 sites with no LinkedIn-specific filters.
+    enabledByDefault: true,
+
+    buildInput: (ctx) => ({
+        keywords: ctx.query,
+        location: ctx.worldwide ? undefined : ctx.countries[0]?.name,
+        // LinkedIn's own posted-within codes, in seconds.
+        datePosted: ctx.maxAgeDays && ctx.maxAgeDays <= 1 ? "r86400" : "r604800",
+        limit: ctx.limit,
+    }),
+
+    /*
+     * Read defensively, because this actor publishes no output schema.
+     *
+     * Apify actors are required to declare their *input* shape and almost none
+     * declare their output, so these names come from the actor's documentation
+     * rather than from a contract. `ApifySource` counts rows that map to no
+     * title and reports the field names it actually saw, so a rename surfaces
+     * as a named problem in `meta.actors` instead of a confident zero that
+     * still bills.
+     */
+    mapRow: (row) => ({
+        title: clean(pick(row, ["title", "jobTitle", "position"], "")),
+        company: clean(pick(row, ["companyName", "company", "companyUrl.name"], "")) || "Unknown",
+        location: clean(pick(row, ["location", "jobLocation", "formattedLocation"], "")),
+        job_type: inferJobType(
+            pick(row, ["workType", "workplaceType", "employmentType", "contractType"], ""),
+            pick(row, ["location"], "")
+        ),
+        description: String(pick(row, ["description", "descriptionText", "jobDescription"], "")),
+        apply_url: clean(pick(row, ["jobUrl", "url", "link", "applyUrl"], "")),
+        salary_text: clean(pick(row, ["salary", "salaryInfo", "compensation"], "")) || null,
+        posted_at_source: toTimestamp(pick(row, ["publishedAt", "postedAt", "postedTime", "listedAt"], null)),
+        source_key: "apify_linkedin",
+        external_id: clean(pick(row, ["jobId", "id", "jobUrl", "url"], "")),
+        // LinkedIn names the employer's own page on most rows, which saves the
+        // enrichment pass a three-request crawl.
+        company_links: clean(pick(row, ["companyUrl", "companyWebsite"], ""))
+            ? { website: clean(pick(row, ["companyUrl", "companyWebsite"], "")), linkedin: null, careers: null }
+            : undefined,
+    }),
+};
+
 const careerSite: ApifyActorSpec = {
     key: "apify_career_sites",
     actorId: "s3dtSTZSZWFtAVLn5",
@@ -387,6 +442,7 @@ function salaryFrom(row: Record<string, unknown>): string | null {
 export const APIFY_ACTORS: ApifyActorSpec[] = [
     wuzzufApify,
     baytApify,
+    linkedin,
     careerSite,
     allJobs,
     baytMemo,

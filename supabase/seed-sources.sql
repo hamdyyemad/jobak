@@ -36,6 +36,7 @@ INSERT INTO sources (name, display_name, url) VALUES
   ('apify_bayt_memo',    'Bayt detailed (Apify)',       'https://apify.com/memo23/bayt-scraper'),
   ('apify_wuzzuf_alt',   'Wuzzuf alternative (Apify)',  'https://apify.com/shahidirfan/Wuzzuf-Jobs-Scraper'),
   ('apify_gulftalent',   'GulfTalent (Apify)',          'https://apify.com/scrapestorm/gulftalent-job-scraper---cheap'),
+  ('apify_linkedin',     'LinkedIn (Apify)',            'https://apify.com/valig/linkedin-jobs-scraper'),
   ('apify_career_sites', 'Company career sites (Apify)','https://apify.com/fantastic-jobs/career-site-job-listing-api'),
   ('apify_all_jobs',     '39 job sites (Apify)',        'https://apify.com/agentx/all-jobs-scraper')
 ON CONFLICT (name) DO UPDATE

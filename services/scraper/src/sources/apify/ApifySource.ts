@@ -81,6 +81,37 @@ export class ApifySource extends JobSource<Record<string, unknown>> {
     }
 
     protected toJob(row: Record<string, unknown>, ctx: SearchContext): ScrapedJob | null {
-        return this.spec.mapRow(row, ctx);
+        const job = this.spec.mapRow(row, ctx);
+
+        /*
+         * An actor that returns rows we cannot read is the expensive failure.
+         *
+         * Apify actors publish an input schema but most publish no *output*
+         * schema, so the field names in `mapRow` are read from documentation and
+         * sample runs — and they drift. When they do, every row maps to an empty
+         * title, the source reports a confident zero, and the user is billed for
+         * the run anyway. That is indistinguishable from "nothing is hiring".
+         *
+         * So the first unreadable row says what it actually contained. One bad
+         * row is still tolerated as an actor quirk; the run only fails when the
+         * mapping is clearly wrong.
+         */
+        if (!job?.title) {
+            this.unmapped++;
+            this.sampleKeys ??= Object.keys(row).slice(0, 20);
+        }
+
+        return job;
+    }
+
+    private unmapped = 0;
+    private sampleKeys: string[] | null = null;
+
+    protected notes(): string[] {
+        if (this.unmapped < 3 || this.sampleKeys === null) return [];
+        return [
+            `${this.unmapped} rows had no readable title — this actor's output field names have probably changed. ` +
+                `Fields present: ${this.sampleKeys.join(", ")}. Fix mapRow in src/apify/catalogue.ts.`,
+        ];
     }
 }

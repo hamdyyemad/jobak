@@ -10,6 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "probe": "tsx scripts/probe.ts",
+    "probe:robots": "tsx scripts/robots-probe.ts",
     "probe:apify": "tsx scripts/apify-probe.ts",
     "probe:enrich": "tsx scripts/enrich-probe.ts",
     "probe:sanitize": "tsx scripts/sanitize-probe.ts"

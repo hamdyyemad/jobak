@@ -89,6 +89,19 @@ export abstract class JobSource<TRaw = unknown> {
     }
 
     /**
+     * Problems worth reporting from a run that still succeeded.
+     *
+     * Surfaced on `meta.sources` alongside the count. The point is anything
+     * that makes a *low* number mean something other than "the market is
+     * quiet" — a stale ATS slug, an actor whose output fields have been
+     * renamed. Those read as an empty market otherwise, which is the one
+     * failure mode nobody investigates.
+     */
+    protected notes(): string[] {
+        return [];
+    }
+
+    /**
      * Does this listing answer the query?
      *
      * Default is "yes" — a source that searched server-side has already
@@ -187,7 +200,7 @@ export abstract class JobSource<TRaw = unknown> {
                 jobs.push(annotateScope(job));
             }
 
-            const notes = this.strategy.notes?.() ?? [];
+            const notes = [...(this.strategy.notes?.() ?? []), ...this.notes()];
 
             return {
                 jobs,

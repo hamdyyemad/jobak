@@ -20,9 +20,9 @@ import { freeResolvers, type WebsiteResolver } from "./resolve.js";
  *      often carries `hiringOrganization.sameAs`. Free, and exact.
  *   2. **The apply URL is already the company's.** True for every ATS listing —
  *      that is what makes them the best rows in the pool.
- *   3. **Resolved.** Wikidata's official-website property, then a verified
- *      domain guess. Both free and both permitted — see `resolve.ts`, which
- *      also records why no search engine is involved.
+ *   3. **Resolved.** A verified domain guess — see `resolve.ts`, which also
+ *      records why neither a search engine nor Wikidata is involved: every one
+ *      of them disallows the endpoint this would have needed.
  *
  * Only step 3 can be wrong, and every result carries how it was reached so a
  * guess never passes for a fact.
@@ -40,7 +40,7 @@ export interface CompanyHints {
 export interface CompanyProfile extends CompanyLinks {
     name: string;
     /** How the website was arrived at, so a caller can weigh it. */
-    resolvedVia: "source" | "apply-url" | "wikidata" | "guess" | "none";
+    resolvedVia: "source" | "apply-url" | "guess" | "none";
 }
 
 /**
