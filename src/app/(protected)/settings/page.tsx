@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getJobCatalogue } from "@/backend/lib/job-catalogue";
 import { getOnboardingProfile } from "@/backend/lib/onboarding-profile";
 import { getUser } from "@/backend/actions/auth";
+import { getApifyCatalogue } from "@/backend/actions/apify";
 import { SettingsClient } from "@/frontend/components/protected/settings/settings-client";
 
 /**
@@ -17,10 +18,13 @@ import { SettingsClient } from "@/frontend/components/protected/settings/setting
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [catalogue, profile, user] = await Promise.all([
+  const [catalogue, profile, user, apifyCatalogue] = await Promise.all([
     getJobCatalogue(),
     getOnboardingProfile(),
     getUser(),
+    // Never fails the page: an unreachable collection service returns an empty
+    // catalogue with an `error`, and the marketplace says so in place of a list.
+    getApifyCatalogue(),
   ]);
 
   // Nothing to configure until the first pass through onboarding has happened.
@@ -29,6 +33,7 @@ export default async function SettingsPage() {
   return (
     <SettingsClient
       catalogue={catalogue}
+      apifyCatalogue={apifyCatalogue}
       profile={profile}
       email={user?.email ?? undefined}
     />

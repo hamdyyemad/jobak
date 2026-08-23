@@ -36,6 +36,13 @@ export interface OnboardingData {
     aiKeys: Partial<Record<AiProvider, string>>;
     /** Required: without it there is nothing to collect listings with. */
     apifyKey: string;
+    /**
+     * Apify actor keys the user switched on in the marketplace.
+     *
+     * Empty means "use the catalogue defaults", not "run nothing" — someone who
+     * never opens the marketplace still collects from the recommended set.
+     */
+    apifyActors: string[];
 }
 
 /**

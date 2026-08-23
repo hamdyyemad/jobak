@@ -43,7 +43,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "scripts": "tsx scripts/cli.ts"
+    "scripts": "tsx scripts/cli.ts",
+    "check:workflows": "node scripts/check-workflows.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",

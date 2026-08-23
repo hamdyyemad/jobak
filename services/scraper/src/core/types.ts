@@ -139,7 +139,7 @@ export type SourceGeo =
     /** Company job boards; location varies per posting. */
     | "company";
 
-export type SourceKind = "api" | "rss" | "html" | "detail" | "ats";
+export type SourceKind = "api" | "rss" | "html" | "detail" | "ats" | "apify";
 
 export interface SourceDescriptor {
     key: string;

@@ -35,9 +35,14 @@ CREATE TABLE IF NOT EXISTS companies (
   -- How `website` was arrived at, so a guess can be told from a fact:
   --   source    — a job board handed it over (Wuzzuf does, for every company)
   --   apply-url — the job's own apply link was already on a company domain
-  --   search    — resolved through a search provider; the only fallible one
+  --   guess     — a domain guess that proved itself against the page title.
+  --               The only fallible one: it can still land on a different
+  --               company with a similar name, so filter on this if you need
+  --               facts rather than leads.
   --   none      — not resolved
-  resolved_via  TEXT CHECK (resolved_via IN ('source', 'apply-url', 'search', 'none')),
+  -- 'wikidata' is retained in the CHECK for rows written before that resolver
+  -- was removed; Wikidata disallows /w/, which is where its search API lives.
+  resolved_via  TEXT CHECK (resolved_via IN ('source', 'apply-url', 'wikidata', 'guess', 'none')),
 
   -- NULL means "never tried". A timestamp means "tried then", whether or not
   -- anything was found — otherwise every run retries the same dead ends.

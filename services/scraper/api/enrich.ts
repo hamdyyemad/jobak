@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { isAuthorized, reject } from "../src/auth.js";
 import { enrichCompany, type CompanyHints, type CompanyProfile } from "../src/enrichment/company.js";
-import { searchFromEnv } from "../src/enrichment/search.js";
+import { freeResolvers } from "../src/enrichment/resolve.js";
 import { Budget, mapLimit } from "../src/lib/http.js";
 
 /**
@@ -60,12 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     /*
-     * Search resolution is opt-in per request as well as per deployment: a
-     * scheduled backfill can afford it, an interactive call may not want to
-     * spend the quota. It is only ever used for companies no source named a
-     * website for.
+     * Resolution costs nothing but time, so it is on unless a caller opts out.
+     * The domain guesser is the slow half — up to 33 requests for a company
+     * that never resolves — and an interactive call may prefer to answer with
+     * only what the sources already knew.
      */
-    const search = body.useSearch === false ? null : searchFromEnv();
+    const resolvers = body.resolve === false ? [] : freeResolvers();
 
     const budget = new Budget(BUDGET_MS);
     const started = Date.now();
@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             try {
-                return await enrichCompany(hint, controller.signal, search);
+                return await enrichCompany(hint, controller.signal, resolvers);
             } catch {
                 return {
                     name: hint.name,
@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 resolved: companies.filter((company) => company.website !== null).length,
                 withLinkedin: companies.filter((company) => company.linkedin !== null).length,
                 withCareers: companies.filter((company) => company.careers !== null).length,
-                searchEnabled: search !== null,
+                resolversEnabled: resolvers.map((resolver) => resolver.name),
                 tookMs: Date.now() - started,
             },
         });

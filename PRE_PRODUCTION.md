@@ -237,12 +237,31 @@ the dashboard reads. Four workflows in `n8n/`, replacing the single
       applied to the live database, which is where the `country_code`,
       `SOURCE_IDS` and `collection_runs` failures came from. There is no
       `jobs.country_code` — geography is `jobs.region_id` → `regions(id)`.
-      1. `collection_runs` + `match_candidate_jobs` from `supabase/schema.sql`
+      1. `collection_runs` from `supabase/schema.sql`
       2. `supabase/seed-regions.sql` — all 246 countries
-      3. `supabase/seed-sources.sql` — the 7 sources missing from the original 5
+      3. `supabase/seed-sources.sql` — every collector, free and Apify
       4. `supabase/phase-2-schema.sql` — queue, marketing, cursor, match unique key
       5. `supabase/job-catalogue.sql` — 13 fields / 95 titles
-      6. `UPDATE collection_cursor SET position = 0 WHERE id = 1;`
+      6. `supabase/fix-matching.sql` — **`match_candidate_jobs` + the scoring
+         columns.** This is the PGRST202 the Search button reports. Note it
+         supersedes the copy in `schema.sql`, which referenced a
+         `jobs.country_code` that has never existed and so could be created but
+         never called.
+      7. `supabase/companies.sql` — company links cache + `jobs.company_id`
+      8. `supabase/apify-marketplace.sql` — `user_preferences.apify_actors`
+      9. `supabase/public-jobs.sql` — public job pages, `is_linkedin_posted`,
+         the posting cursor and `next_linkedin_posts()`. **Widens `jobs` and
+         `companies` to anonymous read** — that is the point of the public
+         pages, and `user_job_matches` stays private.
+      10. `supabase/public-profiles.sql` — the opt-in talent directory. Read the
+          header before running it: it is the one file that deliberately opens a
+          public read path, and the `public_talent` view is the security
+          boundary.
+      11. `UPDATE collection_cursor SET position = 0 WHERE id = 1;`
+
+      The app degrades rather than breaks before 6-8 are applied: the dashboard
+      falls back to the old columns, and Settings still loads. Apify actor
+      selection simply is not persisted until 8 runs.
 - [ ] **Import and schedule the four workflows.**
       `jobak-collect-public` (hourly catalogue sweep),
       `jobak-collect-private` (30 min, the titles users actually chose),

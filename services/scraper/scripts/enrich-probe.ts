@@ -8,10 +8,10 @@
  *   npx tsx scripts/enrich-probe.ts
  */
 import { enrichCompany, type CompanyHints } from "../src/enrichment/company.js";
-import { searchFromEnv } from "../src/enrichment/search.js";
+import { freeResolvers } from "../src/enrichment/resolve.js";
 import { mapLimit } from "../src/lib/http.js";
 
-const search = searchFromEnv();
+const resolvers = freeResolvers();
 
 const CASES: CompanyHints[] = [
     // What Wuzzuf hands over for free — website and LinkedIn, straight off the
@@ -25,16 +25,19 @@ const CASES: CompanyHints[] = [
     { name: "Swvl", website: "https://swvl.com" },
     { name: "Vezeeta", website: "https://www.vezeeta.com" },
     { name: "Tabby", website: "https://tabby.ai" },
-    // Nothing to go on. Resolves only when a search provider is configured.
+    // Nothing to go on but the name — the resolver chain's job.
+    { name: "Careem" },          // Wikidata knows this one
+    { name: "Foodics" },         // Wikidata does not; the domain guesser does
+    { name: "Mobi Egypt" },      // only the hyphenated slug finds this
     { name: "Some Company Nobody Named" },
 ];
 
-console.log(`search provider: ${search ? "configured" : "none (set BRAVE_SEARCH_API_KEY to enable)"}\n`);
+console.log(`resolvers: ${resolvers.map((resolver) => resolver.name).join(" -> ")}\n`);
 
 const controller = new AbortController();
 const started = Date.now();
 
-const profiles = await mapLimit(CASES, 4, (hint) => enrichCompany(hint, controller.signal, search));
+const profiles = await mapLimit(CASES, 4, (hint) => enrichCompany(hint, controller.signal, resolvers));
 
 console.log("COMPANY              VIA         WEBSITE                              LINKEDIN                             CAREERS");
 console.log("─".repeat(150));

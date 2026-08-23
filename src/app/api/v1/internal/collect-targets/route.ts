@@ -39,6 +39,8 @@ interface PrefRow {
     location: { countries?: string[]; worldwide?: boolean } | null;
     work_preference: string[] | null;
     apify_key_encrypted: string | null;
+    /** Optional: absent entirely on the pre-migration fallback select below. */
+    apify_actors?: string[] | null;
 }
 
 function isAuthorized(request: NextRequest): boolean {
@@ -71,12 +73,29 @@ export async function GET(request: NextRequest) {
     try {
         const service = createServiceClient();
 
-        const { data, error } = await service
+        const BASE = "user_id, job_titles, location, work_preference, apify_key_encrypted";
+
+        /*
+         * `apify_actors` arrives with supabase/apify-marketplace.sql. Until it
+         * does, selecting it fails the query and this endpoint reports "no such
+         * user" — which stops Apify collection entirely rather than falling
+         * back to the catalogue defaults.
+         */
+        let { data, error } = await service
             .from("user_preferences")
-            .select("user_id, job_titles, location, work_preference, apify_key_encrypted")
+            .select(`${BASE}, apify_actors`)
             .eq("user_id", userId)
             .eq("onboarding_completed", true)
             .single();
+
+        if (error) {
+            ({ data, error } = await service
+                .from("user_preferences")
+                .select(BASE)
+                .eq("user_id", userId)
+                .eq("onboarding_completed", true)
+                .single());
+        }
 
         if (error || !data) {
             return NextResponse.json({ apifyUsers: [], meta: { reason: "no such user" } });
@@ -112,6 +131,14 @@ export async function GET(request: NextRequest) {
                     countries: worldwide ? [] : (row.location?.countries ?? []).filter(Boolean),
                     worldwide,
                     workPreference: row.work_preference ?? [],
+                    /*
+                     * Which paid actors this user switched on in the
+                     * marketplace. An empty array is meaningful: the collector
+                     * reads it as "the catalogue defaults", so a user who never
+                     * opened the marketplace still collects from the
+                     * recommended set rather than from nothing.
+                     */
+                    apifyActors: row.apify_actors ?? [],
                 },
             ],
             meta: { onDemand: true, generatedAt: new Date().toISOString() },

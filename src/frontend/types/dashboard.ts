@@ -21,14 +21,29 @@ export interface Job {
   /** Remote / onsite / hybrid, as collected. */
   workplace: Workplace;
   salary: string;
-  score: number;
+  /**
+   * The AI match score, 0-100 — or `null` when nothing has scored this yet.
+   *
+   * Nullable on purpose. The dashboard lists jobs straight from the shared pool
+   * alongside scored ones, and collapsing "unscored" to `0` made every new
+   * listing look like a terrible match instead of a pending one.
+   */
+  score: number | null;
   source: Source;
   link: string;
   postedAt: string;
   bookmarked: boolean;
   remote?: boolean;
   tags?: string[];
+  /**
+   * Sanitised HTML, not plain text.
+   *
+   * Descriptions keep their headings and bullet lists now; they used to be
+   * flattened to one unbroken paragraph. Always passed through
+   * `sanitizeDescription` server-side before it reaches a component.
+   */
   description?: string;
+  /** The scorer's one-line reason, when it has run. */
   matchReasons?: string[];
 }
 

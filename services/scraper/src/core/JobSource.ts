@@ -7,7 +7,8 @@ import type {
 } from "./types.js";
 import { annotateScope, passesGeography } from "../filters/geography.js";
 import { withinMaxAge } from "../filters/freshness.js";
-import { canonicalUrl, clean, isArabic, stripHtml, truncate } from "../lib/normalize.js";
+import { canonicalUrl, clean, isArabic, stripHtml } from "../lib/normalize.js";
+import { toSafeDescription, truncateHtml } from "../lib/sanitize.js";
 
 /**
  * `jobs.description` is TEXT and the insert downstream is bulk, so the cap is
@@ -88,6 +89,19 @@ export abstract class JobSource<TRaw = unknown> {
     }
 
     /**
+     * Problems worth reporting from a run that still succeeded.
+     *
+     * Surfaced on `meta.sources` alongside the count. The point is anything
+     * that makes a *low* number mean something other than "the market is
+     * quiet" — a stale ATS slug, an actor whose output fields have been
+     * renamed. Those read as an empty market otherwise, which is the one
+     * failure mode nobody investigates.
+     */
+    protected notes(): string[] {
+        return [];
+    }
+
+    /**
      * Does this listing answer the query?
      *
      * Default is "yes" — a source that searched server-side has already
@@ -111,7 +125,17 @@ export abstract class JobSource<TRaw = unknown> {
         const apply_url = canonicalUrl(job.apply_url);
         if (!title || !apply_url) return null;
 
-        const description = truncate(stripHtml(job.description), DESCRIPTION_MAX);
+        /*
+         * Structure is preserved, not flattened.
+         *
+         * This used to be `stripHtml`, which turned every posting's bullet
+         * lists and headings into one unbroken paragraph — the job drawer had
+         * nothing left to format. `toSafeDescription` keeps a small allowlisted
+         * subset instead (and rebuilds structure from plain-text bullets), and
+         * `truncateHtml` cuts on a tag boundary so a shortened description is
+         * not a broken one.
+         */
+        const description = truncateHtml(toSafeDescription(job.description), DESCRIPTION_MAX);
         const location = clean(job.location);
 
         return {
@@ -176,7 +200,7 @@ export abstract class JobSource<TRaw = unknown> {
                 jobs.push(annotateScope(job));
             }
 
-            const notes = this.strategy.notes?.() ?? [];
+            const notes = [...(this.strategy.notes?.() ?? []), ...this.notes()];
 
             return {
                 jobs,
