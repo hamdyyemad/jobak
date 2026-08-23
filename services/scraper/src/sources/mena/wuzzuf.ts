@@ -2,7 +2,7 @@ import { JobSource } from "../../core/JobSource.js";
 import type { ScrapedJob, SearchContext, SourceDescriptor } from "../../core/types.js";
 import { DetailPageStrategy } from "../../strategies/DetailPageStrategy.js";
 import { matchesQuery } from "../../filters/relevance.js";
-import { fetchText } from "../../lib/http.js";
+import { collectSitemapUrls } from "../../lib/sitemap.js";
 import { clean, foldForMatch, inferJobType, pick, toTimestamp } from "../../lib/normalize.js";
 
 /**
@@ -31,12 +31,19 @@ import { clean, foldForMatch, inferJobType, pick, toTimestamp } from "../../lib/
  * the search before spending a request on a page.
  */
 
-const SITEMAPS: Record<string, string> = {
-    default: "https://wuzzuf.net/sitemap-job-1.xml",
-    SA: "https://wuzzuf.net/sitemap-saudi-job-1.xml",
-};
+/**
+ * The index, not the individual files.
+ *
+ * This used to name `sitemap-job-1.xml` and `sitemap-saudi-job-1.xml`
+ * directly. The `-1` is Wuzzuf saying it intends to shard, and the day it adds
+ * a `-2` those names keep working while quietly returning half the market — an
+ * outage with no error attached. Descending the index means new shards are
+ * picked up on their own.
+ */
+const SITEMAP_INDEX = "https://wuzzuf.net/sitemap.xml";
 
-const LOC = /<loc>([^<]+)<\/loc>/g;
+/** The job shards, out of an index that also lists companies, learning and static pages. */
+const JOB_SITEMAP = /sitemap-(?:[a-z-]+-)?job-\d+\.xml/i;
 
 interface WuzzufRecord {
     attributes: Record<string, unknown>;
@@ -78,30 +85,32 @@ export class WuzzufSource extends JobSource<WuzzufRecord> {
             ? ctx.countries.filter((country) => this.descriptor.countries?.includes(country.code))
             : [{ code: "EG", name: "Egypt" }];
 
-        const files = [...new Set(wanted.map((country) => SITEMAPS[country.code] ?? SITEMAPS.default))];
         const suffixes = wanted.map((country) => `-${slugify(country.name)}`);
         const terms = foldForMatch(ctx.query).split(/\s+/).filter((word) => word.length > 2);
 
+        const urls = await collectSitemapUrls(SITEMAP_INDEX, ctx.signal, {
+            accept: (url) => JOB_SITEMAP.test(url),
+            // Egypt and Saudi are two files today; the ceiling is headroom for
+            // sharding, not an expectation.
+            maxFiles: 6,
+            timeoutMs: 8_000,
+        });
+
         const scored: { url: string; score: number }[] = [];
 
-        for (const file of files) {
-            const xml = await fetchText(file, ctx.signal, { timeoutMs: 8_000 });
+        for (const url of urls) {
+            const slug = decodeURIComponent(url).toLowerCase();
 
-            for (const match of xml.matchAll(LOC)) {
-                const url = match[1];
-                const slug = decodeURIComponent(url).toLowerCase();
+            if (!suffixes.some((suffix) => slug.endsWith(suffix))) continue;
 
-                if (!suffixes.some((suffix) => slug.endsWith(suffix))) continue;
-
-                const score = terms.filter((term) => slug.includes(term)).length;
-                /*
-                 * A slug matching no query word at all is still worth keeping
-                 * when nothing matched: a page carries its related postings
-                 * too, so even an off-target fetch usually returns something
-                 * the query filter can use.
-                 */
-                scored.push({ url, score });
-            }
+            const score = terms.filter((term) => slug.includes(term)).length;
+            /*
+             * A slug matching no query word at all is still worth keeping when
+             * nothing matched: a page carries its related postings too, so even
+             * an off-target fetch usually returns something the query filter
+             * can use.
+             */
+            scored.push({ url, score });
         }
 
         const hits = scored.filter((entry) => entry.score > 0);

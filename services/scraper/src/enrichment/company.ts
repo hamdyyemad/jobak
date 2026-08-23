@@ -2,7 +2,7 @@ import type { CompanyLinks } from "../core/types.js";
 import { tryFetchText } from "../lib/http.js";
 import { absoluteUrl, anchors, footerHtml } from "../lib/html.js";
 import { clean, foldForMatch, hostOf } from "../lib/normalize.js";
-import type { WebSearch } from "./search.js";
+import { freeResolvers, type WebsiteResolver } from "./resolve.js";
 
 /**
  * Getting from a job ad to the company's own front door.
@@ -20,10 +20,12 @@ import type { WebSearch } from "./search.js";
  *      often carries `hiringOrganization.sameAs`. Free, and exact.
  *   2. **The apply URL is already the company's.** True for every ATS listing —
  *      that is what makes them the best rows in the pool.
- *   3. **Search.** Opt-in, and off unless a provider is configured. See
- *      `search.ts` for why this is not a search-engine scrape.
+ *   3. **Resolved.** A verified domain guess — see `resolve.ts`, which also
+ *      records why neither a search engine nor Wikidata is involved: every one
+ *      of them disallows the endpoint this would have needed.
  *
- * Only step 3 can be wrong, and it is the only one that can be turned off.
+ * Only step 3 can be wrong, and every result carries how it was reached so a
+ * guess never passes for a fact.
  */
 
 export interface CompanyHints {
@@ -38,7 +40,7 @@ export interface CompanyHints {
 export interface CompanyProfile extends CompanyLinks {
     name: string;
     /** How the website was arrived at, so a caller can weigh it. */
-    resolvedVia: "source" | "apply-url" | "search" | "none";
+    resolvedVia: "source" | "apply-url" | "guess" | "none";
 }
 
 /**
@@ -72,11 +74,11 @@ const LINKEDIN_COMPANY = /linkedin\.com\/(company|school)\/([A-Za-z0-9\-_%.]+)/i
 export async function enrichCompany(
     hints: CompanyHints,
     signal: AbortSignal,
-    search: WebSearch | null = null
+    resolvers: WebsiteResolver[] = freeResolvers()
 ): Promise<CompanyProfile> {
     const name = clean(hints.name);
 
-    const resolved = await resolveWebsite(hints, signal, search);
+    const resolved = await resolveWebsite(hints, signal, resolvers);
     const profile: CompanyProfile = {
         name,
         website: resolved.website,
@@ -100,7 +102,7 @@ export async function enrichCompany(
 async function resolveWebsite(
     hints: CompanyHints,
     signal: AbortSignal,
-    search: WebSearch | null
+    resolvers: WebsiteResolver[]
 ): Promise<{ website: string | null; via: CompanyProfile["resolvedVia"] }> {
     const declared = normalizeUrl(hints.website);
     if (declared && isCompanyHost(declared)) return { website: declared, via: "source" };
@@ -115,13 +117,15 @@ async function resolveWebsite(
         }
     }
 
-    if (search && hints.name) {
-        const found = normalizeUrl(await search.findHomepage(hints.name, signal));
+    for (const resolver of resolvers) {
+        if (!hints.name || signal.aborted) break;
+
+        const found = normalizeUrl(await resolver.resolve(hints.name, signal));
         if (found && isCompanyHost(found)) {
             try {
-                return { website: new URL(found).origin, via: "search" };
+                return { website: new URL(found).origin, via: resolver.name };
             } catch {
-                /* fall through */
+                continue;
             }
         }
     }

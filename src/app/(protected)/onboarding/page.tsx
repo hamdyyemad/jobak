@@ -1,5 +1,6 @@
 import { getJobCatalogue } from "@/backend/lib/job-catalogue";
 import { getOnboardingProfile } from "@/backend/lib/onboarding-profile";
+import { getApifyCatalogue } from "@/backend/actions/apify";
 import { OnboardingClient } from "@/frontend/components/protected/onboarding/onboarding-client";
 
 /**
@@ -22,7 +23,15 @@ import { OnboardingClient } from "@/frontend/components/protected/onboarding/onb
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
-  const [catalogue, profile] = await Promise.all([getJobCatalogue(), getOnboardingProfile()]);
+  const [catalogue, profile, apifyCatalogue] = await Promise.all([
+    getJobCatalogue(),
+    getOnboardingProfile(),
+    // Degrades to an empty list with an `error` rather than throwing, so an
+    // unreachable collection service cannot block someone from signing up.
+    getApifyCatalogue(),
+  ]);
 
-  return <OnboardingClient catalogue={catalogue} profile={profile} />;
+  return (
+    <OnboardingClient catalogue={catalogue} apifyCatalogue={apifyCatalogue} profile={profile} />
+  );
 }

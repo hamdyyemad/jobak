@@ -168,7 +168,12 @@ export function isArabic(input: string): boolean {
  * hits, which is the sort of bug that reads as "the source returned nothing".
  */
 export function foldForMatch(input: unknown): string {
-    return foldArabic(clean(input).toLowerCase());
+    /*
+     * Tags come out first. Descriptions carry markup now that they are stored
+     * as HTML rather than flattened, and without this a query for "li" would
+     * match every posting with a bullet list.
+     */
+    return foldArabic(stripHtml(input).toLowerCase());
 }
 
 /** The registrable domain, lowercased and without `www.`; "" if unparseable. */

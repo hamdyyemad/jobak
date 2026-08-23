@@ -36,7 +36,15 @@ const faqs = [
   },
   {
     q: "Who can see my preferences and matches?",
-    a: "Only you. Every row is scoped to your account by Postgres row-level security, so the database itself enforces that one account cannot read another's preferences or matches. Your data is not sold or shared.",
+    a: "Your matches, scores and bookmarks are yours alone — every row is scoped to your account by Postgres row-level security, so the database itself enforces that one account cannot read another's. The one exception is opt-in: if you publish a profile to the talent directory, the specific things you tick there become public. Nothing is published unless you turn it on, and your email is never published at all.",
+  },
+  {
+    q: "What is the talent directory?",
+    a: "A public page of candidate cards linking to people's LinkedIn profiles, so employers can find them. It is off for every account until you switch it on from your dashboard, you choose individually whether the card shows your field, skills, experience and what you are open to, and turning it off removes your card straight away. Your email address is never shown on it under any setting.",
+  },
+  {
+    q: "Do I need an account to browse jobs?",
+    a: "No. The jobs page is public and every listing has its own shareable link, so you can read and apply without signing up. An account is what gets those listings scored against your own profile and collected for the roles you care about.",
   },
   {
     q: "Can I run my own copy?",

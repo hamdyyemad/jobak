@@ -8,6 +8,9 @@
  * function timeout.
  */
 
+import { isAllowed, robotsFor, RobotsDisallowed } from "./robots.js";
+import { isBlockedStatus, parseRetryAfter, throttle } from "./throttle.js";
+
 export const UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
@@ -15,6 +18,24 @@ export interface FetchOptions {
     headers?: Record<string, string>;
     /** Per-request cap, independent of the source-wide signal. */
     timeoutMs?: number;
+    /** Defaults to GET. Apify actor runs are the only POSTs this service makes. */
+    method?: "GET" | "POST";
+    body?: string;
+    /**
+     * Skip the robots.txt check.
+     *
+     * For the robots.txt fetch itself, which would otherwise recurse, and for
+     * Apify's API — a service we are a paying client of, not a site we crawl.
+     */
+    skipRobots?: boolean;
+    /**
+     * How long this caller can afford to wait for politeness.
+     *
+     * The throttle would rather wait than be refused, but a source with four
+     * seconds of budget left cannot spend ten of them sleeping. Past this, the
+     * request is abandoned instead — see `ThrottledOut`.
+     */
+    maxWaitMs?: number;
 }
 
 /**
@@ -42,12 +63,82 @@ function linkSignals(outer: AbortSignal, timeoutMs?: number): { signal: AbortSig
     };
 }
 
+/**
+ * Removes credentials from a URL before it goes into an error message.
+ *
+ * Apify takes its token as a query parameter, and errors from this service end
+ * up in n8n's execution log and in `collection_runs.detail` — both of which are
+ * places a user's API token must never be written.
+ */
+function redact(url: string): string {
+    return url.replace(/([?&](?:token|api_?key|secret)=)[^&]*/gi, "$1***");
+}
+
+/** Raised when honouring a host's pace would cost more time than the caller has. */
+export class ThrottledOut extends Error {
+    constructor(host: string, waitMs: number, budgetMs: number) {
+        super(`${host} wants ${Math.round(waitMs)}ms of politeness, budget is ${Math.round(budgetMs)}ms`);
+        this.name = "ThrottledOut";
+    }
+}
+
+const sleep = (ms: number, signal: AbortSignal) =>
+    new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        signal.addEventListener(
+            "abort",
+            () => {
+                clearTimeout(timer);
+                reject(signal.reason ?? new Error("aborted"));
+            },
+            { once: true }
+        );
+    });
+
 export async function fetchText(url: string, signal: AbortSignal, options: FetchOptions = {}): Promise<string> {
+    const host = (() => {
+        try {
+            return new URL(url).host;
+        } catch {
+            return "";
+        }
+    })();
+
+    /*
+     * ── Politeness, before the request rather than after the refusal ──
+     *
+     * Two gates, both ported from Scrapling's crawler: what the site's
+     * robots.txt permits, and how fast it has shown it wants to be hit. Neither
+     * existed before, which is why repeated probing could make three feeds fail
+     * at once with `fetch failed` and then recover on their own.
+     */
+    let floorMs = 0;
+
+    if (host && !options.skipRobots) {
+        const group = await robotsFor(url, signal, fetchText);
+        const path = new URL(url).pathname + new URL(url).search;
+
+        if (!isAllowed(group, path)) throw new RobotsDisallowed(redact(url));
+        floorMs = group.crawlDelayMs ?? 0;
+
+        const waitMs = throttle.waitFor(host);
+        if (waitMs > 0) {
+            const budget = options.maxWaitMs ?? 8_000;
+            if (waitMs > budget) throw new ThrottledOut(host, waitMs, budget);
+            await sleep(waitMs, signal);
+        }
+        throttle.reserve(host, floorMs);
+    }
+
     const { signal: linked, done } = linkSignals(signal, options.timeoutMs);
+    const started = Date.now();
+
     try {
         const res = await fetch(url, {
             signal: linked,
             redirect: "follow",
+            method: options.method ?? "GET",
+            body: options.body,
             headers: {
                 "User-Agent": UA,
                 Accept: "*/*",
@@ -55,8 +146,37 @@ export async function fetchText(url: string, signal: AbortSignal, options: Fetch
                 ...options.headers,
             },
         });
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+
+        if (host && !options.skipRobots) {
+            // Latency is the host's own signal about how much load it is under;
+            // a block is its explicit one. Both feed the next request's pace.
+            throttle.record(
+                host,
+                Date.now() - started,
+                res.ok || !isBlockedStatus(res.status),
+                floorMs,
+                parseRetryAfter(res.headers)
+            );
+        }
+
+        if (!res.ok) {
+            /*
+             * The status alone is not enough to act on for Apify: a 402 means
+             * the user is out of credit and a 404 means the actor was renamed,
+             * and those need different messages. The body carries which.
+             */
+            const detail = await res.text().catch(() => "");
+            const hint = detail.slice(0, 200).replace(/\s+/g, " ").trim();
+            throw new Error(`${res.status} ${res.statusText} — ${redact(url)}${hint ? ` — ${hint}` : ""}`);
+        }
         return await res.text();
+    } catch (error) {
+        // A transport failure — connection reset, DNS, the shape rate limiting
+        // usually takes — counts as a block, so the next request backs off.
+        if (host && !options.skipRobots && !(error instanceof RobotsDisallowed)) {
+            throttle.record(host, Date.now() - started, false, floorMs);
+        }
+        throw error;
     } finally {
         done();
     }

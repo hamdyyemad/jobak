@@ -145,6 +145,14 @@ export async function POST(request: NextRequest) {
           ai_providers: Object.keys(encryptedKeys),
           ai_keys_encrypted: encryptedKeys,
           apify_key_encrypted: encryptedApifyKey,
+          /*
+           * Which collection actors this user switched on. Unknown keys are
+           * ignored by the collector rather than rejected here, so removing an
+           * actor from the catalogue never breaks a saved profile.
+           */
+          apify_actors: Array.isArray(body.apifyActors)
+            ? body.apifyActors.filter((key: unknown) => typeof key === "string" && key)
+            : [],
           // Kept in step with ai_keys_encrypted so anything still reading the
           // single-provider column keeps working.
           groq_api_key_encrypted: encryptedKeys.groq ?? null,

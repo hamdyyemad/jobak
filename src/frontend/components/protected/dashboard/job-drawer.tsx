@@ -51,10 +51,13 @@ export function JobDrawer({ job, onClose, onToggleBookmark }: JobDrawerProps) {
 }
 
 function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: () => void; onToggleBookmark: (id: string) => void }) {
+  const score = job.score;
   const scoreRing =
-    job.score >= 90
+    score === null
+      ? "border-border-standard bg-white/3"
+      : score >= 90
       ? "border-green-500/40 bg-green-500/8"
-      : job.score >= 75
+      : score >= 75
       ? "border-yellow-500/40 bg-yellow-500/8"
       : "border-border-standard bg-white/3";
 
@@ -88,7 +91,16 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
         <div className={`flex items-center justify-between p-4 rounded-xl border ${scoreRing}`}>
           <div>
             <p className="text-xs text-(--fg-tertiary) uppercase tracking-wide font-medium">Match Score</p>
-            <p className="text-3xl font-mono font-bold text-(--fg-primary) mt-0.5">{job.score}<span className="text-base text-(--fg-tertiary) font-normal">%</span></p>
+            {score === null ? (
+              <p className="text-sm text-(--fg-tertiary) mt-1 max-w-[15rem]">
+                Not scored yet — your AI provider rates this against your profile on the next run.
+              </p>
+            ) : (
+              <p className="text-3xl font-mono font-bold text-(--fg-primary) mt-0.5">
+                {score}
+                <span className="text-base text-(--fg-tertiary) font-normal">%</span>
+              </p>
+            )}
           </div>
           <ScoreBadge score={job.score} />
         </div>
@@ -140,9 +152,7 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
         {job.description && (
           <div>
             <SectionLabel>About the role</SectionLabel>
-            <p className="mt-2 text-sm text-(--fg-secondary) leading-relaxed whitespace-pre-line">
-              {job.description}
-            </p>
+            <JobDescription html={job.description} />
           </div>
         )}
       </div>
@@ -184,6 +194,44 @@ function MetaPill({ icon: Icon, label, capitalize, accent }: { icon: React.Eleme
       <Icon className="w-3 h-3 shrink-0" />
       {label}
     </span>
+  );
+}
+
+/**
+ * The posting's own formatting, preserved.
+ *
+ * Descriptions arrive as HTML now rather than a flattened paragraph, so the
+ * headings and bullet lists a posting was written with survive to the screen.
+ *
+ * `dangerouslySetInnerHTML` is safe here only because of what is behind it:
+ * the value has been through `sanitizeDescription` on the server, which reduces
+ * arbitrary source markup to a fixed allowlist — no scripts, no styles, no
+ * attributes except a scheme-checked `href`. Never point this at a string that
+ * has not been through that.
+ *
+ * Tailwind is not used for the inner elements because they come from a string
+ * and cannot carry classes, so the spacing is set on the container instead.
+ */
+function JobDescription({ html }: { html: string }) {
+  return (
+    <div
+      className="mt-2 text-sm text-(--fg-secondary) leading-relaxed space-y-3
+                 [&_p]:my-2
+                 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ul]:space-y-1
+                 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2 [&_ol]:space-y-1
+                 [&_li]:leading-relaxed
+                 [&_h3]:text-(--fg-primary) [&_h3]:font-semibold [&_h3]:text-sm [&_h3]:mt-4 [&_h3]:mb-1
+                 [&_h4]:text-(--fg-primary) [&_h4]:font-semibold [&_h4]:text-sm [&_h4]:mt-3 [&_h4]:mb-1
+                 [&_h5]:text-(--fg-primary) [&_h5]:font-semibold [&_h5]:mt-3
+                 [&_h6]:text-(--fg-primary) [&_h6]:font-semibold [&_h6]:mt-3
+                 [&_strong]:text-(--fg-primary) [&_strong]:font-semibold
+                 [&_b]:text-(--fg-primary) [&_b]:font-semibold
+                 [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_a]:break-words
+                 [&_blockquote]:border-l-2 [&_blockquote]:border-border-standard [&_blockquote]:pl-3 [&_blockquote]:italic
+                 [&_code]:bg-white/5 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs
+                 [&_pre]:bg-white/5 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:text-xs"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
 

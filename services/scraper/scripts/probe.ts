@@ -102,7 +102,21 @@ for (const job of jobs) {
     if (job.posted_at_source !== null && Number.isNaN(new Date(job.posted_at_source).getTime())) {
         problems.push(`${job.source_key}: unparseable date ${JSON.stringify(job.posted_at_source)}`);
     }
-    if (/<[a-z]/i.test(job.description)) problems.push(`${job.source_key}: HTML left in description`);
+    /*
+     * Descriptions are sanitised HTML now, not flattened text, so the old
+     * "contains a tag" check would fail on every row. What matters is that only
+     * the allowlisted subset survived — anything else means the sanitiser let
+     * something through, and this ends up rendered in a browser.
+     */
+    const ALLOWED_TAGS = /^(p|br|ul|ol|li|strong|b|em|i|u|h[3-6]|blockquote|code|pre|a)$/i;
+    for (const tag of job.description.matchAll(/<\/?([a-z0-9]+)[^>]*>/gi)) {
+        if (!ALLOWED_TAGS.test(tag[1])) {
+            problems.push(`${job.source_key}: disallowed <${tag[1]}> in description`);
+        }
+    }
+    if (/\son[a-z]+\s*=|javascript:|data:text\/html/i.test(job.description)) {
+        problems.push(`${job.source_key}: script vector left in description`);
+    }
 }
 
 console.log("SAMPLE");

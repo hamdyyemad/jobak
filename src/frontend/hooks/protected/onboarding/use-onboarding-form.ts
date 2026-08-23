@@ -15,6 +15,8 @@ const initialData: OnboardingData = {
     aiProviders: [],
     aiKeys: {},
     apifyKey: "",
+    // Empty is meaningful here: the collector reads it as "the recommended set".
+    apifyActors: [],
 };
 
 /**

@@ -3,6 +3,7 @@
 import { createClient } from "@/backend/lib/supabase/server";
 import { createServiceClient } from "@/backend/lib/supabase/service";
 import { Job, Workplace } from "@/frontend/types/dashboard";
+import { sanitizeDescription } from "@/backend/lib/html/sanitize-description";
 
 /**
  * How much of the pool to consider before narrowing by title in memory.
@@ -51,6 +52,41 @@ interface PoolRow {
  * matched jobs still sort to the top and unscored ones are visible underneath
  * instead of hidden.
  */
+/**
+ * The user's match rows, tolerating a database that has not been migrated yet.
+ *
+ * `match_reason`, `scored_at` and `tech_stack` arrive with
+ * `supabase/fix-matching.sql`. Selecting a column PostgREST does not know about
+ * fails the whole query, which would empty the dashboard for anyone who has not
+ * run it — a worse outcome than losing the two fields those columns feed. So
+ * the richer select is tried first and the original one is the fallback.
+ *
+ * Delete this once the migration has been applied everywhere.
+ */
+async function readMatches(
+  service: ReturnType<typeof createServiceClient>,
+  userId: string
+): Promise<{ data: Record<string, unknown>[] | null }> {
+  const full = await service
+    .from("user_job_matches")
+    .select("job_id, score, is_bookmarked, match_reason, scored_at, tech_stack")
+    .eq("user_id", userId);
+
+  if (!full.error) return { data: full.data as Record<string, unknown>[] | null };
+
+  console.warn(
+    "getUserJobs: user_job_matches is missing the scoring columns — run supabase/fix-matching.sql. " +
+      "Falling back: scores still show, but there is no way to tell an unscored job from a zero."
+  );
+
+  const basic = await service
+    .from("user_job_matches")
+    .select("job_id, score, is_bookmarked")
+    .eq("user_id", userId);
+
+  return { data: basic.data as Record<string, unknown>[] | null };
+}
+
 export async function getUserJobs(): Promise<Job[]> {
   const supabase = await createClient();
 
@@ -115,7 +151,7 @@ export async function getUserJobs(): Promise<Job[]> {
 
   const [{ data: pool, error }, { data: matches }, { data: sources }] = await Promise.all([
     query,
-    service.from("user_job_matches").select("job_id, score, is_bookmarked").eq("user_id", user.id),
+    readMatches(service, user.id),
     service.from("sources").select("id, display_name"),
   ]);
 
@@ -131,10 +167,29 @@ export async function getUserJobs(): Promise<Job[]> {
    * is genuinely missing, not because the map is stale.
    */
   const sourceName = new Map((sources ?? []).map((s) => [s.id as number, s.display_name as string]));
+  /*
+   * `scored_at` is what separates "the model looked at this and rated it 12"
+   * from "nothing has looked at this yet". Both used to arrive as score 0, so
+   * an unscored pool job was indistinguishable from a terrible match — which is
+   * most of why the AI scoring looked like it was not running at all.
+   */
   const matchByJob = new Map(
     (matches ?? []).map((m) => [
       m.job_id as string,
-      { score: (m.score as number) ?? 0, bookmarked: (m.is_bookmarked as boolean) ?? false },
+      {
+        /*
+         * Post-migration `scored_at` is the authority. Before it exists the
+         * column is absent from the row entirely, and the best available signal
+         * is "there is a score" — which is what this used to assume anyway.
+         */
+        score:
+          "scored_at" in m
+            ? (m.scored_at ? ((m.score as number) ?? 0) : null)
+            : ((m.score as number | null) ?? null),
+        bookmarked: (m.is_bookmarked as boolean) ?? false,
+        reason: (m.match_reason as string | null) ?? null,
+        techStack: Array.isArray(m.tech_stack) ? (m.tech_stack as string[]) : [],
+      },
     ])
   );
 
@@ -154,17 +209,32 @@ export async function getUserJobs(): Promise<Job[]> {
         type: "full-time",
         workplace: toWorkplace(job.job_type ?? ""),
         salary: job.salary_text || "—",
-        score: match?.score ?? 0,
+        // null means "not scored yet", not "scored zero".
+        score: match?.score ?? null,
         source: (job.source_id !== null && sourceName.get(job.source_id)) || "Other",
         link: job.apply_url,
         postedAt: formatDate(job.posted_at_source ?? job.created_at),
         bookmarked: match?.bookmarked ?? false,
         remote: job.job_type === "remote",
-        tags: Array.isArray(job.tech_stack) ? job.tech_stack : [],
-        description: job.description || "",
+        /*
+         * The model's read on the stack beats the source's: most boards publish
+         * no tech stack at all, and `jobs.tech_stack` is empty on nearly every
+         * row as a result.
+         */
+        tags: match?.techStack.length ? match.techStack : Array.isArray(job.tech_stack) ? job.tech_stack : [],
+        description: sanitizeDescription(job.description),
+        /*
+         * The scorer has always been asked for this and the workflow always
+         * threw it away, so "Why it matches your CV" had nothing to render.
+         */
+        matchReasons: match?.reason ? [match.reason] : undefined,
       } satisfies Job;
     })
-    .sort((a, b) => b.score - a.score)
+    /*
+     * Scored jobs first, best first; unscored underneath in pool order rather
+     * than mixed in at an implied zero.
+     */
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
     .slice(0, MAX_RESULTS);
 }
 
