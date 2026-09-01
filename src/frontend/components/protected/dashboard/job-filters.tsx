@@ -1,5 +1,6 @@
 import { SlidersHorizontal } from "lucide-react";
 import { Source } from "@/frontend/types/dashboard";
+import { FilterChip } from "@/frontend/components/ui/chip";
 
 interface JobFiltersProps {
   activeFilter: Source | "all";
@@ -8,23 +9,23 @@ interface JobFiltersProps {
   onFilterChange: (source: Source | "all") => void;
 }
 
-export function JobFilters({ sources,
-  activeFilter, onFilterChange }: JobFiltersProps) {
+/**
+ * Note: nothing renders this today — `dashboard-client` has its own inline
+ * `FilterGroup`. It is kept on the shared `FilterChip` so the two cannot drift,
+ * but the duplication is real and worth collapsing in a behavioural pass.
+ */
+export function JobFilters({ sources, activeFilter, onFilterChange }: JobFiltersProps) {
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <SlidersHorizontal className="w-4 h-4 text-(--fg-tertiary) shrink-0" />
+    <div className="flex flex-wrap items-center gap-2">
+      <SlidersHorizontal className="size-4 shrink-0 text-fg-tertiary" />
       {sources.map((source) => (
-        <button
+        <FilterChip
           key={source}
+          selected={activeFilter === source}
           onClick={() => onFilterChange(source)}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all capitalize ${
-            activeFilter === source
-              ? "bg-accent text-(--bg-canvas) border-accent"
-              : "border-border-standard text-(--fg-tertiary) hover:text-(--fg-primary) hover:border-border-strong bg-white/2"
-          }`}
         >
           {source}
-        </button>
+        </FilterChip>
       ))}
     </div>
   );

@@ -77,7 +77,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                             href={item.href}
                             title={collapsed ? item.label : undefined}
                             aria-current={active ? "page" : undefined}
-                            className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 whitespace-nowrap overflow-hidden ${
+                            className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-control text-sm font-medium transition-all duration-150 whitespace-nowrap overflow-hidden ${
                                 active
                                     ? "bg-accent/10 text-accent-text"
                                     : "text-(--fg-tertiary) hover:text-(--fg-primary) hover:bg-white/4"
@@ -95,7 +95,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     <button
                         type="submit"
                         title={collapsed ? "Sign out" : undefined}
-                        className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-(--fg-tertiary) hover:text-status-rose hover:bg-status-rose/5 transition-all whitespace-nowrap overflow-hidden"
+                        className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-control text-sm text-fg-tertiary hover:text-status-rose hover:bg-status-rose/5 transition-all whitespace-nowrap overflow-hidden"
                     >
                         <LogOut className="w-[18px] h-[18px] shrink-0" />
                         {!collapsed && <span>Sign out</span>}

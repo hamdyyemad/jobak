@@ -9,27 +9,32 @@ export const jobakViewport: Viewport = {
 };
 
 export const jobakMetadata: Metadata = {
+    /*
+     * Required for the generated OG and Twitter cards: without it Next resolves
+     * `og:image` against localhost, so every shared link points at an image
+     * nobody else can load.
+     */
+    metadataBase: new URL("https://jobak.io"),
     title: "Jobak — AI-Powered Job Matching Platform",
     description: "Find your perfect job with AI-powered recommendations. Jobak connects you with remote, on-site, and hybrid opportunities tailored to your skills, experience, and preferences.",
     keywords: ["job search", "AI job matching", "remote jobs", "career opportunities", "job finder", "personalized job search", "tech jobs", "software engineering jobs"],
     authors: [{ name: "Jobak" }],
     creator: "Jobak",
     publisher: "Jobak",
-    icons: {
-        icon: [
-            { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-            { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-            { url: "/favicon.ico", sizes: "any" },
-        ],
-        apple: [
-            { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-        ],
-        other: [
-            { url: "/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-            { url: "/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
-        ],
-    },
-    manifest: "/site.webmanifest",
+    /*
+     * No hand-written `icons` or `manifest` here on purpose.
+     *
+     * This block used to point at /favicon-16x16.png, /apple-touch-icon.png,
+     * /android-chrome-*.png and /site.webmanifest — none of which were ever
+     * served. Those files sit in `src/app/`, and Next only serves a file from
+     * there if it matches a metadata convention; anything else needs to be in
+     * `public/`. Every one of those URLs 404'd, so the site effectively had no
+     * icons and no manifest at all.
+     *
+     * Icons now come from the conventions themselves — `favicon.ico`,
+     * `icon.svg`, `apple-icon.tsx` — and the manifest from `manifest.ts`. Next
+     * emits the tags and the hashed URLs, so they cannot fall out of step again.
+     */
     robots: isProductionSite
         ? {
             index: true,

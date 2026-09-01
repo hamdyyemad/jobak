@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1128" height="191" viewBox="0 0 1128 191" fill="none" role="img" aria-label="Jobak — jobs worth applying to">
+  <!--
+    LinkedIn company page cover — 1128 x 191.
+
+    LinkedIn crops this hard on mobile and overlaps the left ~180px with the
+    page logo, so everything that has to survive lives right of x=210 and the
+    left third is deliberately empty except for atmosphere.
+  -->
+  <defs>
+    <radialGradient id="wash" cx="72%" cy="18%" r="78%">
+      <stop offset="0%" stop-color="#58e68c" stop-opacity="0.20"/>
+      <stop offset="70%" stop-color="#58e68c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1128" height="191" fill="#08090a"/>
+  <rect width="1128" height="191" fill="url(#wash)"/>
+
+  <!-- Mark -->
+  <g transform="translate(214, 62) scale(1.05)">
+    <path d="M45 14 V36 A13 13 0 0 1 19 36" stroke="#58e68c" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="23" cy="18" r="5.5" fill="#58e68c"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="288" y="94" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="40" font-weight="600" letter-spacing="-1.4" fill="#f7f8f8">Jobak</text>
+
+  <line x1="288" y1="112" x2="880" y2="112" stroke="url(#rule)" stroke-width="1"/>
+
+  <!-- Line -->
+  <text x="288" y="140" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="19" fill="#d0d6e0">Jobs worth applying to, scored against your own profile.</text>
+
+  <!-- Micro-label, right -->
+  <g transform="translate(1064, 96)">
+    <circle cx="-166" cy="-4" r="3.5" fill="#58e68c"/>
+    <text x="-152" y="0" font-family="'Geist Mono', ui-monospace, monospace" font-size="12" letter-spacing="2.4" fill="#8a8f98">JOBAK.IO</text>
+  </g>
+</svg>

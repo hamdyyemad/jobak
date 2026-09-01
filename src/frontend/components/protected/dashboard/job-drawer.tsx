@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { X, Bookmark, BookmarkCheck, MapPin, Clock, Banknote, Wifi, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Job } from "@/frontend/types/dashboard";
-import { sourceColor } from "./data";
+import { sourceHue } from "./data";
+import { Chip } from "@/frontend/components/ui/chip";
 import { ScoreBadge } from "./score-badge";
 import { DocumentGenerator } from "@/frontend/components/protected/documents/document-generator";
 
@@ -53,21 +54,24 @@ export function JobDrawer({ job, onClose, onToggleBookmark }: JobDrawerProps) {
 
 function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: () => void; onToggleBookmark: (id: string) => void }) {
   const score = job.score;
-  const scoreRing =
-    score === null
-      ? "border-border-standard bg-white/3"
-      : score >= 90
-      ? "border-green-500/40 bg-green-500/8"
-      : score >= 75
-      ? "border-yellow-500/40 bg-yellow-500/8"
-      : "border-border-standard bg-white/3";
+  /*
+   * Thresholds match ScoreBadge (80 / 60), not the 90 / 75 this used before.
+   * The drawer and the card disagreed about what counted as a strong match, so
+   * an 82 rendered green in the list and neutral once you opened it.
+   */
+  const scoreTint =
+    score === null || score < 60
+      ? "var(--score-low)"
+      : score >= 80
+      ? "var(--score-high)"
+      : "var(--score-mid)";
 
   return (
     <>
       {/* Header */}
       <div className="flex items-start gap-4 px-6 pt-6 pb-5 border-b border-border-subtle shrink-0">
         {/* Company avatar */}
-        <div className="w-12 h-12 rounded-xl bg-white/6 border border-border-standard flex items-center justify-center text-lg font-bold text-(--fg-secondary) shrink-0">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-card border border-border-standard bg-white/6 text-lg font-semibold text-fg-secondary">
           {job.company[0]}
         </div>
 
@@ -78,7 +82,7 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
 
         <button
           onClick={onClose}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-(--fg-tertiary) hover:text-(--fg-primary) hover:bg-white/5 transition-all shrink-0"
+          className="flex size-8 shrink-0 items-center justify-center rounded-control text-fg-tertiary transition-all hover:bg-white/5 hover:text-fg-primary"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
@@ -89,21 +93,34 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
         {/* Score ring */}
-        <div className={`flex items-center justify-between p-4 rounded-xl border ${scoreRing}`}>
-          <div>
-            <p className="text-xs text-(--fg-tertiary) uppercase tracking-wide font-medium">Match Score</p>
-            {score === null ? (
-              <p className="text-sm text-(--fg-tertiary) mt-1 max-w-[15rem]">
-                Not scored yet — your AI provider rates this against your profile on the next run.
+        <div className="rounded-card border border-border-subtle bg-(image:--surface-1) p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="font-mono text-[9.5px] uppercase tracking-[0.17em] text-fg-quaternary">
+                Match score
               </p>
-            ) : (
-              <p className="text-3xl font-mono font-bold text-(--fg-primary) mt-0.5">
-                {score}
-                <span className="text-base text-(--fg-tertiary) font-normal">%</span>
-              </p>
-            )}
+              {score === null ? (
+                <p className="mt-2 max-w-[17rem] text-sm text-fg-tertiary">
+                  Not scored yet — your AI provider rates this against your profile on the next run.
+                </p>
+              ) : (
+                <p className="mt-2 text-[32px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-fg-primary">
+                  {score}
+                  <span className="ml-0.5 text-lg font-normal text-fg-quaternary">/100</span>
+                </p>
+              )}
+            </div>
+            <ScoreBadge score={job.score} />
           </div>
-          <ScoreBadge score={job.score} />
+
+          {score !== null && (
+            <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/8">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.max(0, Math.min(100, score))}%`, background: scoreTint }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Meta pills */}
@@ -112,12 +129,10 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
           <MetaPill icon={Clock} label={job.type} capitalize />
           {job.salary && <MetaPill icon={Banknote} label={job.salary} />}
           {job.remote && <MetaPill icon={Wifi} label="Remote" accent />}
-          <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs ${sourceColor(job.source)}`}>
+          <Chip dot={sourceHue(job.source)} className="px-3 py-1.5">
             {job.source}
-          </span>
-          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border-standard text-(--fg-quaternary) text-xs">
-            {job.postedAt}
-          </span>
+          </Chip>
+          <Chip className="px-3 py-1.5 text-fg-quaternary">{job.postedAt}</Chip>
         </div>
 
         {/* Tags */}
@@ -126,7 +141,7 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
             <SectionLabel>Skills & Tags</SectionLabel>
             <div className="flex flex-wrap gap-2 mt-2">
               {job.tags.map((tag) => (
-                <span key={tag} className="px-2.5 py-1 rounded-lg text-xs bg-accent/8 border border-accent/20 text-accent-text">
+                <span key={tag} className="rounded-chip border border-accent/20 bg-accent/8 px-2.5 py-1 text-[11.5px] text-accent-text">
                   {tag}
                 </span>
               ))}
@@ -181,17 +196,17 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
           href={job.link}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent text-(--bg-canvas) font-semibold text-sm hover:bg-accent-bright transition-all shadow-[0_0_20px_oklch(0.82_0.20_145_/_0.15)]"
+          className="flex h-10 flex-1 items-center justify-center gap-2 rounded-control bg-accent text-[13.5px] font-medium text-[#06210f] transition-colors hover:bg-accent-bright"
         >
-          Apply Now
-          <ExternalLink className="w-3.5 h-3.5" />
+          Apply now
+          <ExternalLink className="size-3.5" />
         </a>
         <button
           onClick={() => onToggleBookmark(job.id)}
-          className={`w-11 h-11 rounded-xl border flex items-center justify-center transition-all ${
+          className={`flex size-10 items-center justify-center rounded-control border transition-all ${
             job.bookmarked
               ? "border-accent/40 bg-accent/10 text-accent"
-              : "border-border-standard text-(--fg-tertiary) hover:text-accent hover:border-accent/30 bg-white/2"
+              : "border-border-standard bg-white/2.5 text-fg-tertiary hover:border-accent/30 hover:text-accent"
           }`}
           title={job.bookmarked ? "Remove bookmark" : "Bookmark"}
         >
@@ -204,12 +219,12 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
 
 function MetaPill({ icon: Icon, label, capitalize, accent }: { icon: React.ElementType; label: string; capitalize?: boolean; accent?: boolean }) {
   return (
-    <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs ${
+    <span className={`flex items-center gap-1.5 rounded-chip border px-3 py-1.5 text-[11.5px] ${
       accent
         ? "border-accent/30 bg-accent/8 text-accent-text"
-        : "border-border-standard text-(--fg-tertiary) bg-white/2"
+        : "border-border-standard bg-white/2.5 text-fg-secondary"
     } ${capitalize ? "capitalize" : ""}`}>
-      <Icon className="w-3 h-3 shrink-0" />
+      <Icon className="size-3 shrink-0" />
       {label}
     </span>
   );
@@ -247,7 +262,7 @@ function JobDescription({ html }: { html: string }) {
                  [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_a]:break-words
                  [&_blockquote]:border-l-2 [&_blockquote]:border-border-standard [&_blockquote]:pl-3 [&_blockquote]:italic
                  [&_code]:bg-white/5 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs
-                 [&_pre]:bg-white/5 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:text-xs"
+                 [&_pre]:bg-white/5 [&_pre]:p-3 [&_pre]:rounded-control [&_pre]:overflow-x-auto [&_pre]:text-xs"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -275,6 +290,6 @@ function stripTags(html: string): string {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-widest text-(--fg-quaternary)">{children}</p>
+    <p className="font-mono text-[9.5px] uppercase tracking-[0.17em] text-fg-quaternary">{children}</p>
   );
 }

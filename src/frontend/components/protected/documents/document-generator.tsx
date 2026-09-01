@@ -105,21 +105,21 @@ export function DocumentGenerator({
                             onClick={() => generate(kind)}
                             disabled={!enoughText || isPending}
                             title={enoughText ? blurb : "Paste a job description first"}
-                            className={`flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                            className={`flex items-start gap-2.5 rounded-card border p-3 text-left transition-all disabled:opacity-50 ${
                                 isActive
                                     ? "border-accent/40 bg-accent/8"
-                                    : "border-border-standard bg-white/2 hover:border-border-strong"
+                                    : "border-border-subtle bg-(image:--surface-1) hover:-translate-y-px hover:border-border-strong"
                             }`}
                         >
                             {isPending ? (
-                                <Loader2 className="w-4 h-4 shrink-0 mt-0.5 animate-spin text-accent" />
+                                <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent" />
                             ) : (
-                                <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${done ? "text-accent" : "text-(--fg-tertiary)"}`} />
+                                <Icon className={`mt-0.5 size-4 shrink-0 ${done ? "text-accent" : "text-fg-tertiary"}`} />
                             )}
                             <span className="min-w-0">
-                                <span className="block text-sm font-medium text-(--fg-primary)">{label}</span>
+                                <span className="block text-[13px] font-medium text-fg-primary">{label}</span>
                                 {layout === "page" && (
-                                    <span className="block text-xs text-(--fg-quaternary) mt-0.5">{blurb}</span>
+                                    <span className="mt-0.5 block text-xs text-fg-quaternary">{blurb}</span>
                                 )}
                             </span>
                         </button>
@@ -139,15 +139,15 @@ export function DocumentGenerator({
             )}
 
             {error && (
-                <p role="alert" className="text-sm text-(--status-rose) border-l-2 border-(--status-rose) pl-3 py-1">
+                <p role="alert" className="rounded-control border border-status-rose/30 bg-status-rose/8 px-4 py-2.5 text-sm text-status-rose">
                     {error}
                 </p>
             )}
 
             {shown && (
-                <div className="rounded-xl border border-border-standard bg-white/2 overflow-hidden">
+                <div className="overflow-hidden rounded-card border border-border-subtle bg-(image:--surface-1)">
                     <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border-subtle">
-                        <span className="text-xs font-medium text-(--fg-tertiary)">
+                        <span className="font-mono text-[9.5px] uppercase tracking-[0.17em] text-fg-quaternary">
                             {KINDS.find((k) => k.kind === active)?.label}
                         </span>
                         <div className="flex items-center gap-2">

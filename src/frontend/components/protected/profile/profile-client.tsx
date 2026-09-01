@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, ExternalLink, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Eye, EyeOff, Loader2 } from "lucide-react";
+import { PageHeader } from "@/frontend/components/ui/page-header";
+import { Button } from "@/frontend/components/ui/button";
+import { Field, Input, Textarea } from "@/frontend/components/ui/field";
+import { Eyebrow } from "@/frontend/components/ui/surface";
 import {
   saveProfile,
   setProfileVisibility,
@@ -14,8 +18,6 @@ interface ProfileClientProps {
   /** What the card would show, pulled from onboarding answers. */
   preferences: { field: string | null; skills: string[]; experience: number; openTo: string[] };
 }
-
-const LABEL = "font-mono text-[11px] uppercase tracking-[0.22em] text-fg-quaternary";
 
 /**
  * The page where someone decides whether to exist publicly.
@@ -96,34 +98,30 @@ export function ProfileClient({ profile, preferences }: ProfileClientProps) {
 
   return (
     <main className="flex-1 overflow-y-auto bg-(--bg-canvas)">
-      <div className="max-w-3xl mx-auto px-6 py-12 lg:py-16">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-sm text-fg-tertiary hover:text-fg-primary mb-10"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Dashboard
-        </Link>
-
-        <h1 className="text-3xl font-display tracking-tight">Public profile</h1>
-        <p className="mt-3 text-[15px] text-fg-secondary leading-relaxed max-w-xl">
-          Jobak has a public page where people looking for work can be found by employers. It is off
-          until you turn it on, and nothing below is visible to anyone while it is off.
-        </p>
+      {/* max-w-3xl: a form page, so it takes the reading width, not the working width. */}
+      <div className="mx-auto max-w-3xl px-6 py-10 lg:px-8 lg:py-14">
+        <PageHeader
+          breadcrumb={["Dashboard", "Public profile"]}
+          title="Public profile"
+          description="Jobak has a public page where people looking for work can be found by employers. It is off until you turn it on, and nothing below is visible to anyone while it is off."
+          backHref="/dashboard"
+        />
 
         {/* ── The switch ───────────────────────────────────── */}
         <section
-          className={`mt-10 p-5 rounded-2xl border ${
-            form.isPublic ? "border-accent/40 bg-accent/6" : "border-border-standard bg-white/2"
+          className={`rounded-card border p-5 ${
+            form.isPublic
+              ? "border-accent/40 bg-accent/6"
+              : "border-border-subtle bg-(image:--surface-1)"
           }`}
         >
           <div className="flex items-start justify-between gap-6 flex-wrap">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 font-semibold text-fg-primary">
-                {form.isPublic ? <Eye className="w-4 h-4 text-accent" /> : <EyeOff className="w-4 h-4" />}
+              <p className="flex items-center gap-2 font-medium text-fg-primary">
+                {form.isPublic ? <Eye className="size-4 text-accent" /> : <EyeOff className="size-4" />}
                 {form.isPublic ? "Your profile is public" : "Your profile is private"}
               </p>
-              <p className="mt-1.5 text-sm text-fg-tertiary max-w-md leading-relaxed">
+              <p className="mt-1.5 max-w-md text-sm leading-relaxed text-fg-tertiary">
                 {form.isPublic ? (
                   <>
                     Anyone can see your card on the talent page — no account needed. Your email is
@@ -131,10 +129,10 @@ export function ProfileClient({ profile, preferences }: ProfileClientProps) {
                     {form.slug && (
                       <Link
                         href="/talent"
-                        className="text-accent underline underline-offset-2 inline-flex items-center gap-1"
+                        className="inline-flex items-center gap-1 text-accent-text underline underline-offset-2"
                       >
                         View the page
-                        <ExternalLink className="w-3 h-3" />
+                        <ExternalLink className="size-3" />
                       </Link>
                     )}
                   </>
@@ -144,99 +142,89 @@ export function ProfileClient({ profile, preferences }: ProfileClientProps) {
               </p>
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant={form.isPublic ? "secondary" : "primary"}
+              size="lg"
               onClick={handleToggleVisibility}
               disabled={publishing}
-              className={`shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 ${
-                form.isPublic
-                  ? "border border-border-standard text-fg-secondary hover:text-fg-primary hover:border-foreground/40"
-                  : "bg-accent text-(--bg-canvas) hover:bg-accent-bright"
-              }`}
+              className="shrink-0"
             >
-              {publishing && <Loader2 className="w-4 h-4 animate-spin" />}
+              {publishing && <Loader2 className="animate-spin" />}
               {form.isPublic ? "Make private" : "Publish my profile"}
-            </button>
+            </Button>
           </div>
         </section>
 
         {/* ── Fields ───────────────────────────────────────── */}
         <section className="mt-12 space-y-6">
-          <p className={LABEL}>Your card</p>
+          <Eyebrow>Your card</Eyebrow>
 
           <Field label="Display name" hint="Shown as the card title. Your email is never published.">
-            <input
+            <Input
               value={form.displayName}
               onChange={(e) => edit({ displayName: e.target.value })}
               maxLength={80}
               placeholder="Hamdy Emad"
-              className={INPUT}
             />
           </Field>
 
           <Field label="Headline" hint="One line. What you do, and what you are looking for.">
-            <input
+            <Input
               value={form.headline}
               onChange={(e) => edit({ headline: e.target.value })}
               maxLength={140}
               placeholder="Backend engineer, 6 years — open to remote roles"
-              className={INPUT}
             />
           </Field>
 
           <Field label="About" hint="Optional. A short paragraph, up to 600 characters.">
-            <textarea
+            <Textarea
               value={form.bio}
               onChange={(e) => edit({ bio: e.target.value })}
               maxLength={600}
               rows={4}
-              className={`${INPUT} resize-y`}
             />
           </Field>
 
           <Field label="LinkedIn" hint="Must be a linkedin.com link. This is the main thing employers click.">
-            <input
+            <Input
               value={form.linkedinUrl}
               onChange={(e) => edit({ linkedinUrl: e.target.value })}
               placeholder="https://www.linkedin.com/in/your-handle"
-              className={INPUT}
             />
           </Field>
 
           <div className="grid gap-6 sm:grid-cols-2">
             <Field label="GitHub" hint="Optional.">
-              <input
+              <Input
                 value={form.githubUrl}
                 onChange={(e) => edit({ githubUrl: e.target.value })}
                 placeholder="https://github.com/you"
-                className={INPUT}
               />
             </Field>
             <Field label="Website" hint="Optional.">
-              <input
+              <Input
                 value={form.websiteUrl}
                 onChange={(e) => edit({ websiteUrl: e.target.value })}
                 placeholder="https://yoursite.com"
-                className={INPUT}
               />
             </Field>
           </div>
 
           <Field label="Location" hint="Free text — as specific or vague as you like.">
-            <input
+            <Input
               value={form.locationLabel}
               onChange={(e) => edit({ locationLabel: e.target.value })}
               maxLength={80}
               placeholder="Cairo, Egypt"
-              className={INPUT}
             />
           </Field>
         </section>
 
         {/* ── What to reuse from onboarding ────────────────── */}
         <section className="mt-12">
-          <p className={LABEL}>From your job preferences</p>
-          <p className="mt-3 text-sm text-fg-tertiary max-w-xl leading-relaxed">
+          <Eyebrow>From your job preferences</Eyebrow>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-fg-tertiary">
             These come from onboarding. Each is off or on independently — being in the directory is
             not the same as showing everything in it.
           </p>
@@ -270,51 +258,28 @@ export function ProfileClient({ profile, preferences }: ProfileClientProps) {
         </section>
 
         {error && (
-          <p className="mt-8 text-sm text-(--status-rose)" role="alert">
+          <p className="mt-8 rounded-control border border-status-rose/30 bg-status-rose/8 px-4 py-2.5 text-sm text-status-rose" role="alert">
             {error}
           </p>
         )}
 
         <div className="mt-10 flex items-center gap-4 border-t border-border-subtle pt-6">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-(--bg-canvas) font-semibold text-sm hover:bg-accent-bright transition-all disabled:opacity-60"
-          >
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            Save
-          </button>
+          <Button variant="primary" size="lg" onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="animate-spin" />}
+            Save changes
+          </Button>
           {saved && (
-            <span className="inline-flex items-center gap-1.5 text-sm text-accent-text">
-              <Check className="w-4 h-4" />
+            <span
+              role="status"
+              className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-quaternary"
+            >
+              <Check className="size-3.5" />
               Saved
             </span>
           )}
         </div>
       </div>
     </main>
-  );
-}
-
-const INPUT =
-  "w-full rounded-xl border border-border-standard bg-white/2 px-3.5 py-2.5 text-[15px] text-fg-primary placeholder:text-fg-quaternary focus:border-accent/50 focus:outline-none transition-colors";
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-fg-primary mb-1.5">{label}</label>
-      {hint && <p className="text-xs text-fg-quaternary mb-2">{hint}</p>}
-      {children}
-    </div>
   );
 }
 
@@ -334,19 +299,21 @@ function Toggle({
       type="button"
       onClick={() => onChange(!on)}
       aria-pressed={on}
-      className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all ${
-        on ? "border-accent/40 bg-accent/6" : "border-border-standard bg-white/2"
+      className={`flex w-full items-center gap-3 rounded-control border p-3.5 text-left transition-all ${
+        on
+          ? "border-accent/40 bg-accent/6"
+          : "border-border-subtle bg-(image:--surface-1) hover:border-border-strong"
       }`}
     >
       <span
-        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-          on ? "bg-accent border-accent" : "border-border-strong"
+        className={`flex size-4 shrink-0 items-center justify-center rounded-[4px] border ${
+          on ? "border-accent bg-accent" : "border-border-strong"
         }`}
       >
-        {on && <Check className="w-3 h-3 text-(--bg-canvas)" />}
+        {on && <Check className="size-3 text-(--bg-canvas)" />}
       </span>
-      <span className="text-sm font-medium text-fg-primary w-24 shrink-0">{label}</span>
-      <span className="text-sm text-fg-tertiary truncate">{value}</span>
+      <span className="w-24 shrink-0 text-[13px] font-medium text-fg-primary">{label}</span>
+      <span className="truncate text-[13px] text-fg-tertiary">{value}</span>
     </button>
   );
 }

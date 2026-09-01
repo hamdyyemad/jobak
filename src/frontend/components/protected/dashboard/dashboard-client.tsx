@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { Job, CvInsights, Workplace } from "@/frontend/types/dashboard";
+import { FilterChip } from "@/frontend/components/ui/chip";
 import { toggleBookmarkAction } from "@/backend/actions/jobs";
 import { useJobFilters, type ScoredFilter } from "@/frontend/hooks/protected/dashboard/use-job-filters";
 import { GreetingBanner } from "./greeting-banner";
@@ -144,15 +145,15 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
   return (
     <>
       {/* Topbar */}
-      <header className="h-15 shrink-0 flex items-center px-5 gap-3 border-b border-border-subtle bg-(--bg-canvas)/70 backdrop-blur-sm">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-(--fg-tertiary)" />
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle bg-(--bg-canvas)/70 px-6 backdrop-blur-sm">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-tertiary" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search jobs or companies…"
-              className="w-full pl-8 pr-4 py-2 rounded-lg bg-white/3 border border-border-standard text-(--fg-primary) placeholder:text-fg-quaternary focus:outline-none focus:border-accent/60 transition-colors text-sm"
+              className="h-9 w-full rounded-control border border-border-standard bg-white/2.5 pl-8 pr-3 text-sm text-fg-primary transition-[border-color,background] placeholder:text-fg-quaternary focus:border-accent/45 focus:bg-white/4 focus:outline-none"
             />
           </div>
 
@@ -201,17 +202,17 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-3 shrink-0">
-          <span className="text-xs text-(--fg-quaternary) tabular-nums whitespace-nowrap">
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <span className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.16em] text-fg-quaternary tabular-nums">
             {visibleJobs.length}
-            {visibleJobs.length !== jobs.length && ` / ${jobs.length}`}
+            {visibleJobs.length !== jobs.length && ` / ${jobs.length}`} shown
           </span>
           {isFiltered && (
             <button
               onClick={reset}
-              className="inline-flex items-center gap-1 text-xs text-(--fg-tertiary) hover:text-(--fg-primary) whitespace-nowrap"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-fg-tertiary transition-colors hover:text-fg-primary"
             >
-              <X className="w-3 h-3" />
+              <X className="size-3" />
               Clear
             </button>
           )}
@@ -219,7 +220,7 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
       </header>
 
         {/* Scrollable body */}
-      <main className="flex-1 overflow-y-auto px-5 py-5">
+      <main className="flex-1 overflow-y-auto px-6 py-8">
           <GreetingBanner
             userName={userName}
             insights={insights}
@@ -228,13 +229,13 @@ export function DashboardClient({ initialJobs, userName }: DashboardClientProps)
           />
 
           {refreshError && (
-            <p role="alert" className="mb-4 border-l-2 border-(--status-rose) py-2 pl-4 text-sm text-(--status-rose)">
+            <p role="alert" className="mb-4 rounded-control border border-status-rose/30 bg-status-rose/8 px-4 py-2.5 text-sm text-status-rose">
               {refreshError}
             </p>
           )}
 
           {refreshNotice && !refreshError && (
-            <p role="status" className="mb-4 border-l-2 border-(--status-amber) py-2 pl-4 text-sm text-fg-secondary">
+            <p role="status" className="mb-4 rounded-control border border-status-amber/30 bg-status-amber/8 px-4 py-2.5 text-sm text-fg-secondary">
               {refreshNotice}
             </p>
           )}
@@ -283,24 +284,16 @@ function FilterGroup({
   onSelect: (value: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 shrink-0">
-      {options.map((option) => {
-        const selected = active === option.value;
-        return (
-          <button
-            key={option.value}
-            onClick={() => onSelect(option.value)}
-            aria-pressed={selected}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap capitalize ${
-              selected
-                ? "bg-accent text-(--bg-canvas) border-accent"
-                : "border-border-standard text-(--fg-tertiary) hover:text-(--fg-primary) hover:border-border-strong bg-white/2"
-            }`}
-          >
-            {option.label}
-          </button>
-        );
-      })}
+    <div className="flex shrink-0 items-center gap-1">
+      {options.map((option) => (
+        <FilterChip
+          key={option.value}
+          selected={active === option.value}
+          onClick={() => onSelect(option.value)}
+        >
+          {option.label}
+        </FilterChip>
+      ))}
     </div>
   );
 }

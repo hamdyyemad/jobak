@@ -1,30 +1,61 @@
 /**
- * Chip colours per source.
+ * Source identity, as a hue rather than a filled pill.
  *
- * Keyed by display name so a source the collectors add later still renders —
- * with the neutral fallback rather than borrowing another source's colour.
- * The filter row itself is built from the jobs actually on screen, so there is
- * no hardcoded source list to drift out of date.
+ * This file used to hold fourteen hardcoded Tailwind colour pairs — a blue
+ * background, blue text and blue border for LinkedIn, purple for Indeed, and so
+ * on down the list. Two problems with that. It made the job list very loud for
+ * information that is secondary to the match itself, and every collector added
+ * later needed either a fifteenth hardcoded entry or the grey fallback, so the
+ * set could not stay coherent as the source list grew.
+ *
+ * Now a source resolves to one token from the ramp and the chip renders it as a
+ * 5px dot. Known sources keep a stable, deliberate hue; anything new hashes
+ * into the same ramp and looks native immediately.
  */
-const SOURCE_COLORS: Record<string, string> = {
-    LinkedIn: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    "LinkedIn (via Apify)": "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    Indeed: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-    "Indeed (via Apify)": "bg-purple-500/10 text-purple-400 border-purple-500/20",
-    RemoteOK: "bg-green-500/10 text-green-400 border-green-500/20",
-    Wuzzuf: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-    Remotive: "bg-teal-500/10 text-teal-400 border-teal-500/20",
-    Arbeitnow: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    Jobicy: "bg-pink-500/10 text-pink-400 border-pink-500/20",
-    Himalayas: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-    "We Work Remotely": "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-    Greenhouse: "bg-lime-500/10 text-lime-400 border-lime-500/20",
-    Ashby: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-    Workable: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+const RAMP = [
+    "var(--hue-1)",
+    "var(--hue-2)",
+    "var(--hue-3)",
+    "var(--hue-4)",
+    "var(--hue-5)",
+    "var(--hue-6)",
+    "var(--hue-7)",
+    "var(--hue-8)",
+] as const;
+
+/**
+ * Pinned hues for the sources we already collect, so they do not shuffle when
+ * the ramp changes. Keyed by display name, and the Apify variants deliberately
+ * share a hue with their direct counterpart — they are the same job board.
+ */
+const PINNED: Record<string, number> = {
+    LinkedIn: 0,
+    "LinkedIn (via Apify)": 0,
+    Indeed: 1,
+    "Indeed (via Apify)": 1,
+    RemoteOK: 2,
+    Wuzzuf: 3,
+    Remotive: 5,
+    Arbeitnow: 6,
+    Jobicy: 4,
+    Himalayas: 0,
+    "We Work Remotely": 5,
+    Greenhouse: 6,
+    Ashby: 1,
+    Workable: 7,
 };
 
-const FALLBACK = "bg-white/5 text-(--fg-tertiary) border-border-standard";
+/** Stable, order-independent hash so an unknown source keeps one hue. */
+function hashIndex(source: string): number {
+    let hash = 0;
+    for (let i = 0; i < source.length; i += 1) {
+        hash = (hash * 31 + source.charCodeAt(i)) >>> 0;
+    }
+    return hash % RAMP.length;
+}
 
-export function sourceColor(source: string): string {
-    return SOURCE_COLORS[source] ?? FALLBACK;
+/** The dot colour for a source. Always resolves — there is no grey fallback. */
+export function sourceHue(source: string): string {
+    const pinned = PINNED[source];
+    return RAMP[pinned ?? hashIndex(source)];
 }
