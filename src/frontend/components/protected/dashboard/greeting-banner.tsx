@@ -65,10 +65,15 @@ export function GreetingBanner({ userName, insights, isRefreshing, onRefresh }: 
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <Stat label="Jobs found" value={insights.totalJobs} />
+        <Stat
+          label="Jobs found"
+          value={insights.totalJobs}
+          caption={insights.totalJobs === 1 ? "In your pool" : "In your pool right now"}
+        />
         <Stat
           label="Avg match"
           value={`${insights.avgScore}%`}
+          caption="Across scored listings"
           meter={insights.avgScore}
           meterColor={
             insights.avgScore >= 80
@@ -85,7 +90,11 @@ export function GreetingBanner({ userName, insights, isRefreshing, onRefresh }: 
           meter={insights.totalJobs ? (insights.topMatchesCount / insights.totalJobs) * 100 : 0}
           meterColor="var(--score-high)"
         />
-        <Stat label="Bookmarked" value={insights.bookmarkedCount} />
+        <Stat
+          label="Bookmarked"
+          value={insights.bookmarkedCount}
+          caption={insights.bookmarkedCount ? "Saved for later" : "Nothing saved yet"}
+        />
       </div>
     </div>
   );

@@ -22,8 +22,8 @@
 
   <!-- Mark -->
   <g transform="translate(214, 62) scale(1.05)">
-    <path d="M45 14 V36 A13 13 0 0 1 19 36" stroke="#58e68c" stroke-width="7" stroke-linecap="round" fill="none"/>
-    <circle cx="23" cy="18" r="5.5" fill="#58e68c"/>
+    <path d="M42 12 V38 A10 10 0 0 1 22 38" stroke="#58e68c" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="25" cy="22" r="5.5" fill="#58e68c"/>
   </g>
 
   <!-- Wordmark -->

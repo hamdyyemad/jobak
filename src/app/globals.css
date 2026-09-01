@@ -636,6 +636,34 @@ body {
   box-shadow: 0 0 10px color-mix(in srgb, var(--sc-a) 70%, transparent);
 }
 
+/*
+ * Settings reuses the onboarding step components, which is right — a second
+ * copy of the country picker would drift within a release. But it also drags
+ * the *scene's* intensity onto a page that has no scene: on onboarding the
+ * sweep and the glowing marker are read against a full-bleed tinted field and
+ * one question at a time, whereas Settings stacks four sections of them with
+ * everything already answered, and the page turns solid green.
+ *
+ * `.opt-quiet` is the Settings context. Same rows, same behaviour, dialled back
+ * so the tint reads as "selected" rather than as the subject of the page.
+ * Onboarding is untouched.
+ */
+.opt-quiet .opt-row::before {
+  opacity: 0.45;
+}
+
+.opt-quiet .opt-row[data-selected="true"] {
+  border-bottom-color: var(--border-subtle);
+}
+
+.opt-quiet .opt-marker {
+  box-shadow: none;
+}
+
+.opt-quiet .opt-row[data-selected="true"] .opt-marker {
+  box-shadow: none;
+}
+
 /* ── Option rows — the hertzwerk move: rules, not cards ────── */
 .opt-row {
   position: relative;

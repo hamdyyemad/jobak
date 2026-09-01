@@ -31,13 +31,13 @@ export default function AppleIcon() {
             >
                 <svg width="180" height="180" viewBox="0 0 64 64" fill="none">
                     <path
-                        d="M45 14 V36 A13 13 0 0 1 19 36"
+                        d="M42 12 V38 A10 10 0 0 1 22 38"
                         stroke="#58e68c"
                         strokeWidth="7"
                         strokeLinecap="round"
                         fill="none"
                     />
-                    <circle cx="23" cy="18" r="5.5" fill="#58e68c" />
+                    <circle cx="25" cy="22" r="5.5" fill="#58e68c" />
                 </svg>
             </div>
         ),

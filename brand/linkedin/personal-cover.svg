@@ -30,8 +30,8 @@
   <rect width="1584" height="396" fill="url(#wash)"/>
 
   <g transform="translate(560, 118) scale(1.5)">
-    <path d="M45 14 V36 A13 13 0 0 1 19 36" stroke="#58e68c" stroke-width="7" stroke-linecap="round" fill="none"/>
-    <circle cx="23" cy="18" r="5.5" fill="#58e68c"/>
+    <path d="M42 12 V38 A10 10 0 0 1 22 38" stroke="#58e68c" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="25" cy="22" r="5.5" fill="#58e68c"/>
   </g>
 
   <text x="672" y="176" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="60" font-weight="600" letter-spacing="-2.1" fill="#f7f8f8">Jobak</text>

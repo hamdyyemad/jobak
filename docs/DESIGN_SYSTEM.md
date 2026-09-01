@@ -107,12 +107,13 @@ button dated the whole surface.
 4px base. Card padding **20** compact / **24** default. Section gap **48**.
 Page gutter **24** mobile / **32** desktop.
 
-**Two container widths, chosen by page type:**
+**No page container.** Every signed-in page is full width with a `px-6 py-8`
+gutter, matching the dashboard. Centred `max-w-*` columns were tried and
+removed: mixing widths across pages left each one starting at a different left
+edge, which read as inconsistent indentation when moving between them.
 
-| Width | Page kind | Pages |
-| --- | --- | --- |
-| `max-w-3xl` | Reading and forms | Settings, Profile |
-| `max-w-6xl` | Working surfaces | Dashboard, Documents |
+Cap an individual block if its content needs a readable measure (`max-w-[62ch]`
+on prose, for instance) — but cap the block, never centre the page.
 
 ### Type
 

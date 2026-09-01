@@ -98,8 +98,7 @@ export function ProfileClient({ profile, preferences }: ProfileClientProps) {
 
   return (
     <main className="flex-1 overflow-y-auto bg-(--bg-canvas)">
-      {/* max-w-3xl: a form page, so it takes the reading width, not the working width. */}
-      <div className="mx-auto max-w-3xl px-6 py-10 lg:px-8 lg:py-14">
+      <div className="px-6 py-8">
         <PageHeader
           breadcrumb={["Dashboard", "Public profile"]}
           title="Public profile"

@@ -289,6 +289,8 @@ function FilterGroup({
         <FilterChip
           key={option.value}
           selected={active === option.value}
+          /* "all" is every group's no-op default — see FilterChip. */
+          neutral={option.value === "all"}
           onClick={() => onSelect(option.value)}
         >
           {option.label}

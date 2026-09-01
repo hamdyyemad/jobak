@@ -40,14 +40,14 @@ function LogoMark({ size = "md", className }: { size?: "sm" | "md" | "lg"; class
     >
       {/* The horizon: the J's bowl, drawn as a single unbroken stroke. */}
       <path
-        d="M45 14 V36 A13 13 0 0 1 19 36"
+        d="M42 12 V38 A10 10 0 0 1 22 38"
         stroke="currentColor"
         strokeWidth="7"
         strokeLinecap="round"
         fill="none"
       />
       {/* The sun, detached — the tittle every reference monogram carries. */}
-      <circle cx="23" cy="18" r="5.5" fill="currentColor" />
+      <circle cx="25" cy="22" r="5.5" fill="currentColor" />
     </svg>
   );
 }
@@ -75,9 +75,9 @@ export function JobakTile({ size = 40, className }: { size?: number; className?:
         <rect x="5" y="5" width="54" height="54" rx="17" fill="#fff" />
         <path
           fill="#000"
-          d="M36 16 H44 V34 A14 14 0 0 1 16 34 H24 A6 6 0 0 0 36 34 Z"
+          d="M36 12 H44 V34 A12 12 0 0 1 20 34 H28 A4 4 0 0 0 36 34 Z"
         />
-        <circle cx="24" cy="20" r="4.4" fill="#000" />
+        <circle cx="26" cy="18" r="4.4" fill="#000" />
       </mask>
       <rect
         x="5"

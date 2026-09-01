@@ -47,18 +47,29 @@ export function Chip({
  */
 export function FilterChip({
     selected,
+    neutral,
     className,
     ...props
-}: React.ComponentProps<"button"> & { selected?: boolean }) {
+}: React.ComponentProps<"button"> & { selected?: boolean; neutral?: boolean }) {
+    /*
+     * `neutral` is the "show everything" option in a group.
+     *
+     * It is selected by default in all three filter rows, so filling it with
+     * accent meant an unfiltered dashboard opened with three bright green pills
+     * across the top — which is both loud and backwards: accent should mark the
+     * filters a user actually applied, not the absence of any. Neutral still
+     * reads as current, just without claiming to be a filter.
+     */
     return (
         <button
             type="button"
             aria-pressed={selected}
             className={cn(
                 "shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium capitalize transition-all",
-                selected
-                    ? "border-accent bg-accent text-(--bg-canvas)"
-                    : "border-border-standard bg-white/2 text-fg-tertiary hover:border-border-strong hover:text-fg-primary",
+                selected && neutral && "border-border-strong bg-white/8 text-fg-primary",
+                selected && !neutral && "border-accent bg-accent text-(--bg-canvas)",
+                !selected &&
+                    "border-border-standard bg-white/2 text-fg-tertiary hover:border-border-strong hover:text-fg-primary",
                 className
             )}
             {...props}

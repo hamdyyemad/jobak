@@ -127,14 +127,29 @@ export function DocumentGenerator({
                 })}
             </div>
 
+            {/*
+              Two different situations. In the drawer it means the listing shipped
+              without a description and the user needs somewhere else to go; on the
+              documents page they are standing on that somewhere else, and the old
+              copy told them to navigate to the page they were already on.
+            */}
             {!enoughText && (
-                <p className="text-xs text-(--fg-quaternary)">
-                    This listing has no description stored, so there is nothing to work from. Paste the
-                    posting into the{" "}
-                    <a href="/dashboard/documents" className="text-accent underline underline-offset-2">
-                        documents page
-                    </a>{" "}
-                    instead.
+                <p className="text-xs text-fg-quaternary">
+                    {layout === "page" ? (
+                        "Paste a job description on the left to enable these — at least 80 characters."
+                    ) : (
+                        <>
+                            This listing has no description stored, so there is nothing to work from.
+                            Paste the posting into the{" "}
+                            <a
+                                href="/dashboard/documents"
+                                className="text-accent-text underline underline-offset-2"
+                            >
+                                documents page
+                            </a>{" "}
+                            instead.
+                        </>
+                    )}
                 </p>
             )}
 

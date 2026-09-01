@@ -117,8 +117,7 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
 
   return (
     <div className="flex-1 overflow-y-auto bg-(--bg-canvas)">
-      {/* max-w-3xl: a form page, so it takes the reading width, not the working width. */}
-      <div className="mx-auto max-w-3xl px-6 py-10 lg:px-8 lg:py-14">
+      <div className="px-6 py-8">
         <PageHeader
           breadcrumb={["Dashboard", "Settings"]}
           title="Settings"
@@ -150,7 +149,9 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
 
         <p className="mt-5 max-w-[62ch] text-[13px] leading-relaxed text-fg-tertiary">{active.blurb}</p>
 
-        <div role="tabpanel" className="mt-8">
+        {/* `opt-quiet`: see globals.css — tones the onboarding rows down for a
+            page that has no scene behind them. */}
+        <div role="tabpanel" className="opt-quiet mt-8">
           {tab === "matching" && (
             <div className="space-y-12">
               <Section title="Work arrangement">

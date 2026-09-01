@@ -22,8 +22,7 @@ export function DocumentsClient() {
 
     return (
         <main className="flex-1 overflow-y-auto bg-(--bg-canvas)">
-            {/* max-w-6xl: a working surface, so it takes the wide width. */}
-            <div className="mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-14">
+            <div className="px-6 py-8">
                 <PageHeader
                     breadcrumb={["Dashboard", "Documents"]}
                     title="Application documents"

@@ -40,13 +40,13 @@ export default function OpengraphImage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
                     <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
                         <path
-                            d="M45 14 V36 A13 13 0 0 1 19 36"
+                            d="M42 12 V38 A10 10 0 0 1 22 38"
                             stroke={ACCENT}
                             strokeWidth="7"
                             strokeLinecap="round"
                             fill="none"
                         />
-                        <circle cx="23" cy="18" r="5.5" fill={ACCENT} />
+                        <circle cx="25" cy="22" r="5.5" fill={ACCENT} />
                     </svg>
                     <div
                         style={{
@@ -71,7 +71,7 @@ export default function OpengraphImage() {
                             maxWidth: 940,
                         }}
                     >
-                        Jobs worth applying to, scored against your own profile.
+                        Jobs worth applying to.
                     </div>
                     <div
                         style={{
@@ -82,8 +82,8 @@ export default function OpengraphImage() {
                             maxWidth: 820,
                         }}
                     >
-                        Remote, hybrid and on-site roles matched by AI — running on your own
-                        provider key, billed at cost.
+                        Scored against your own profile by AI — running on your provider
+                        key, billed at cost.
                     </div>
                 </div>
 
