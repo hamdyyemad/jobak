@@ -1,7 +1,7 @@
-"use client";
-import { useState } from "react";
-import { Check, Copy, Coffee } from "lucide-react";
-import { supportWallets, SupportWallet } from "./data";
+import Link from "next/link";
+import { Coffee } from "lucide-react";
+import { supportWallets } from "./data";
+import { WalletList } from "@/frontend/components/public/support/wallet-list";
 
 /**
  * "Buy me a coffee" tip strip.
@@ -26,59 +26,16 @@ export function SupportStrip() {
           </p>
         </div>
 
-        <ul className="space-y-2 w-full lg:max-w-xl">
-          {supportWallets.map((wallet) => (
-            <WalletRow key={`${wallet.network}-${wallet.address}`} wallet={wallet} />
-          ))}
-        </ul>
+        <div className="w-full lg:max-w-xl">
+          <WalletList wallets={supportWallets} />
+          <Link
+            href="/support"
+            className="mt-3 inline-block text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+          >
+            Other ways to help
+          </Link>
+        </div>
       </div>
     </div>
-  );
-}
-
-function WalletRow({ wallet }: { wallet: SupportWallet }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(wallet.address);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard can be blocked by permissions; the address stays selectable.
-      setCopied(false);
-    }
-  };
-
-  return (
-    <li className="flex items-center gap-3 rounded-xl border border-border-standard bg-white/2 px-4 py-3">
-      <span className="text-xs font-mono text-accent-text shrink-0 w-24">
-        {wallet.network}
-      </span>
-      <code className="text-xs font-mono text-muted-foreground truncate flex-1 select-all">
-        {wallet.address}
-      </code>
-      <button
-        type="button"
-        onClick={copy}
-        className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg px-2 py-1 outline-none focus-visible:ring-1 focus-visible:ring-accent"
-        aria-label={`Copy ${wallet.network} address`}
-      >
-        {copied ? (
-          <>
-            <Check className="w-3.5 h-3.5 text-accent" />
-            Copied
-          </>
-        ) : (
-          <>
-            <Copy className="w-3.5 h-3.5" />
-            Copy
-          </>
-        )}
-      </button>
-      <span aria-live="polite" className="sr-only">
-        {copied ? `${wallet.network} address copied` : ""}
-      </span>
-    </li>
   );
 }
