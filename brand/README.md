@@ -1,0 +1,95 @@
+# Jobak brand assets
+
+Source files for anything that leaves the product — social profiles, posts, app
+icons. Everything here is SVG so it stays editable and exports at any size.
+
+The design system these follow is documented in
+[`docs/DESIGN_SYSTEM.md`](../docs/DESIGN_SYSTEM.md).
+
+## Palette
+
+Only four values are ever needed off-product. They are the sRGB fallbacks of the
+app's OKLCH tokens, because SVG and social platforms do not reliably support
+OKLCH.
+
+| Role | Hex | Token in the app |
+| --- | --- | --- |
+| Canvas | `#08090a` | `--bg-canvas` |
+| Accent | `#58e68c` | `--accent` |
+| Foreground | `#f7f8f8` | `--fg-primary` |
+| Muted | `#8a8f98` | `--fg-tertiary` |
+
+## Type
+
+Geist (600 for the wordmark and headlines) and Geist Mono (labels, letter-spaced
+`0.2em`, uppercase). Both are already dependencies of the app.
+
+**Export note:** SVG text renders with whatever font the exporting machine has.
+If Geist is not installed locally, install it first or convert text to outlines
+before exporting — otherwise the fallback stack silently substitutes Segoe UI
+and the letter-spacing will not match the product.
+
+## `logo/`
+
+| File | Use |
+| --- | --- |
+| `mark.svg` | The mark in accent green. Default. |
+| `mark-mono.svg` | Same geometry in `currentColor` — set `color` on the parent to place it on any ground. |
+| `tile.svg` | The J as negative space in a rounded tile. **App icons and avatars only** — it is the one variant that supplies its own background. |
+| `lockup.svg` | Mark + wordmark, horizontal. |
+
+The mark is "Horizon J": the J's bowl is the horizon and the detached disc is
+the sun above it. It is two elements at one stroke weight, which is what lets it
+hold together at 16px. Do not add a container, a gradient or a shadow to it —
+the tile is the only approved enclosure, and only for icons.
+
+Keep these in sync with `src/frontend/components/shared/jobak-logo.tsx` and
+`src/app/icon.svg`, which carry the same path data.
+
+## `linkedin/`
+
+| File | Size | Placement notes |
+| --- | --- | --- |
+| `company-logo.svg` | 400×400 | LinkedIn rounds it into a square. Minimum accepted is 300×300. |
+| `company-cover.svg` | 1128×191 | The page logo overlaps the left ~180px — the layout keeps that area clear. |
+| `personal-cover.svg` | 1584×396 | The profile photo covers the bottom-left corner — nothing load-bearing goes there. |
+| `post-announcement.svg` | 1200×627 | 1.91:1, the ratio LinkedIn leaves uncropped in the feed. For releases and features. |
+| `post-square.svg` | 1080×1080 | For posts built around a single number. Takes more feed height, so use it when the number earns it. |
+
+The two post files are **templates**. Replace the eyebrow, headline, support
+line and (on the square) the stat; leave the palette, mark, rule and footer
+alone so a run of posts reads as one voice. Keep post headlines under roughly 60
+characters or they need a third line and collide with the footer rule.
+
+## Exporting to PNG
+
+LinkedIn needs raster. With Inkscape:
+
+```bash
+inkscape brand/linkedin/company-cover.svg -o company-cover.png -w 1128
+inkscape brand/linkedin/post-announcement.svg -o post-announcement.png -w 1200
+```
+
+Or with `rsvg-convert`:
+
+```bash
+rsvg-convert -w 1128 brand/linkedin/company-cover.svg -o company-cover.png
+```
+
+Export PNGs are deliberately **not** committed — they go stale against the SVG
+and there is no way to tell by looking.
+
+## Still outstanding
+
+`src/app/android-chrome-192x192.png`, `android-chrome-512x512.png`,
+`apple-touch-icon.png`, `favicon-16x16.png`, `favicon-32x32.png` and
+`favicon.ico` still carry the **old** sun-and-horizon badge.
+
+Of those, only `favicon.ico` is currently served — the rest were referenced by
+URLs that 404'd (see the note in `src/frontend/lib/configs/metadata.ts`), and
+their references have been removed. `icon.svg` and `apple-icon.tsx` now cover
+modern browsers and iOS.
+
+To finish the job: re-export `favicon.ico` from `logo/tile.svg` at 16/32/48, and
+either delete the unreferenced PNGs or re-export and re-register them in
+`src/app/manifest.ts`.

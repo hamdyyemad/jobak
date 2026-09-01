@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <!-- currentColor: for placing on any ground. Set `color` on the parent. -->
+  <path d="M42 12 V38 A10 10 0 0 1 22 38" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <circle cx="25" cy="22" r="5.5" fill="currentColor"/>
+</svg>

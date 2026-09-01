@@ -1,5 +1,5 @@
 import type { ScrapedJob, SearchContext } from "../core/types.js";
-import { clean, inferJobType, pick, toTimestamp } from "../lib/normalize.js";
+import { clean, inferJobType, pick, resolveJobType, toTimestamp } from "../lib/normalize.js";
 
 /**
  * The Apify marketplace.
@@ -126,7 +126,7 @@ const baytApify: ApifyActorSpec = {
         title: clean(row.title),
         company: clean(row.company) || "Confidential",
         location: clean(row.location),
-        job_type: row.isRemote === true ? "remote" : inferJobType(row.location, row.employmentType),
+        job_type: resolveJobType(row.isRemote === true, row.location, row.employmentType),
         description: "",
         apply_url: clean(row.url),
         salary_text: clean(row.salaryText) || null,
@@ -367,7 +367,7 @@ const careerSite: ApifyActorSpec = {
              * mapper follows, and it is what the eligibility filter reads.
              */
             location: (remote && requirements.length ? requirements : locations).join(", "),
-            job_type: remote ? "remote" : inferJobType(row.location_type, locations.join(" ")),
+            job_type: resolveJobType(remote, row.location_type, locations.join(" "), row.employment_type),
             description: String(row.description ?? ""),
             apply_url: clean(row.url),
             salary_text: clean(row.salary) || null,
@@ -407,7 +407,7 @@ const allJobs: ApifyActorSpec = {
         title: clean(row.title),
         company: clean(row.company_name) || "Unknown",
         location: clean(row.location),
-        job_type: row.is_remote === true ? "remote" : inferJobType(row.work_mode, row.location),
+        job_type: resolveJobType(row.is_remote === true, row.work_mode, row.job_type, row.location),
         description: String(row.description ?? ""),
         // `platform_url` is the aggregator's page; `official_url` is the
         // company's own posting. Preferring the latter is the whole point of

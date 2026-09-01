@@ -38,10 +38,72 @@ export function stripHtml(input: unknown): string {
  * "Larsen &amp; Toubro" and "JACK &amp; JONES".
  */
 export function clean(input: unknown): string {
-    return String(input ?? "")
+    return flatten(input)
         .replace(/&(amp|lt|gt|quot|#39|apos|nbsp|#x27|#x2F);/g, (m) => ENTITIES[m] ?? m)
         .replace(/\s+/g, " ")
         .trim();
+}
+
+/**
+ * Keys that carry a human label on a structured value.
+ *
+ * Ordered so the most specific wins the de-duplication below: a place object
+ * with both `name` and `city` set to different things is naming a venue inside
+ * a city, and the venue is the more useful half.
+ */
+const LABEL_KEYS = [
+    "name",
+    "label",
+    "text",
+    "title",
+    "displayName",
+    "display_name",
+    // Wuzzuf's own key on `workplaceArrangement` and `careerLevel`. Its mapper
+    // reaches into the object directly, but a future one that passes the whole
+    // object should still read as "Remote" rather than as nothing.
+    "displayedName",
+    "value",
+    "city",
+    "country",
+];
+
+/**
+ * Any JSON value a source hands us, as display text.
+ *
+ * This exists because `String(value)` on an object produces the literal
+ * `"[object Object]"` — and that string was reaching the database and then the
+ * job cards. Several sources publish `location` as a structured value
+ * (`{ city, country }`, or an array of places), every mapper funnels through
+ * `clean`, so one blind stringification became visible everywhere.
+ *
+ * An object with no recognisable label flattens to empty text rather than to a
+ * placeholder: a blank location is honest, and "[object Object]" is not.
+ */
+function flatten(input: unknown): string {
+    if (input === null || input === undefined) return "";
+
+    const type = typeof input;
+    if (type === "string") return input as string;
+    if (type === "number" || type === "boolean" || type === "bigint") return String(input);
+    if (type === "function" || type === "symbol") return "";
+
+    if (Array.isArray(input)) {
+        return input.map(flatten).filter(Boolean).join(", ");
+    }
+
+    const record = input as Record<string, unknown>;
+
+    /*
+     * Several labelled fields at once — `{ city: "Cairo", country: "Egypt" }` —
+     * read better joined than as whichever key happened to be checked first.
+     */
+    const parts = LABEL_KEYS.map((key) => record[key])
+        .filter((value) => typeof value === "string" || typeof value === "number")
+        .map((value) => String(value).trim())
+        .filter(Boolean);
+
+    // De-duplicated: `{ name: "Cairo", city: "Cairo" }` is one place, not two.
+    return [...new Set(parts)].join(", ");
 }
 
 export function truncate(s: string, max: number): string {
@@ -93,12 +155,40 @@ export function toTimestamp(value: unknown): string | null {
     return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-/** Best guess at workplace type from whatever text the source gives us. */
+/**
+ * Best guess at workplace type from whatever text the source gives us.
+ *
+ * Flattened through `clean` rather than `String`, so a structured
+ * `workplaceArrangement` object is read for its label instead of becoming
+ * "[object object]" and matching nothing.
+ */
 export function inferJobType(...parts: unknown[]): ScrapedJob["job_type"] {
-    const text = parts.map((p) => String(p ?? "")).join(" ").toLowerCase();
+    const text = parts.map(clean).join(" ").toLowerCase();
     if (/\bhybrid\b/.test(text)) return "hybrid";
     if (/\bremote\b|work from home|wfh|anywhere/.test(text)) return "remote";
     return "onsite";
+}
+
+/**
+ * Workplace type when the source offers both a boolean and some text.
+ *
+ * Every source with an `isRemote` / `telecommuting` / `is_remote` flag was
+ * written as `flag === true ? "remote" : inferJobType(...)`, which lets the
+ * flag beat the words. That is backwards, and it is why listings showed here as
+ * Remote while the original posting said Hybrid: these flags mean "not fully
+ * on-site", so boards set them for hybrid roles too.
+ *
+ * "Hybrid" is the more specific claim, so it wins wherever it is stated. The
+ * flag only decides between remote and on-site when the text says neither.
+ */
+export function resolveJobType(
+    remoteFlag: boolean | null | undefined,
+    ...parts: unknown[]
+): ScrapedJob["job_type"] {
+    const inferred = inferJobType(...parts);
+    if (inferred === "hybrid") return "hybrid";
+    if (remoteFlag === true) return "remote";
+    return inferred;
 }
 
 /** Drops query strings and fragments so the same posting dedupes reliably. */

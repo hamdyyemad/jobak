@@ -30,7 +30,7 @@ export function StepApifyActors({ catalogue, selected, onChange, hasToken }: Ste
   if (catalogue.error) {
     return (
       <div className="flex items-start gap-3 p-4 rounded-xl border border-border-standard bg-white/2">
-        <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-amber" />
         <div>
           <p className="text-sm text-(--fg-secondary)">{catalogue.error}</p>
           <p className="text-xs text-(--fg-quaternary) mt-1">
@@ -167,7 +167,7 @@ function Tag({
   return (
     <span
       className={`inline-flex items-center gap-1 text-[11px] ${
-        tone === "warn" ? "text-yellow-400/90" : "text-(--fg-quaternary)"
+        tone === "warn" ? "text-status-amber/90" : "text-fg-quaternary"
       }`}
     >
       <Icon className="w-3 h-3 shrink-0" />

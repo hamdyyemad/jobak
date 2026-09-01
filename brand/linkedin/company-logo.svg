@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" fill="none" role="img" aria-label="Jobak">
+  <!--
+    LinkedIn company logo — 400 x 400 (LinkedIn accepts 300x300 minimum and
+    renders it as a rounded square, so the tile lock-up is the right variant:
+    it supplies its own ground instead of borrowing the feed's.
+  -->
+  <rect width="400" height="400" rx="88" fill="#08090a"/>
+  <g transform="translate(75, 75) scale(3.90625)">
+    <path d="M42 12 V38 A10 10 0 0 1 22 38" stroke="#58e68c" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="25" cy="22" r="5.5" fill="#58e68c"/>
+  </g>
+</svg>

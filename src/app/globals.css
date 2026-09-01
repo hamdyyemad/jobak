@@ -36,6 +36,46 @@
   --status-amber: oklch(0.82 0.16 75);
   --status-rose: oklch(0.72 0.16 20);
 
+  /*
+   * Match quality — deliberately NOT the brand accent.
+   *
+   * These used to be raw Tailwind (`green-400`, `yellow-400`) picked per
+   * component, and "high score" shared its green with the primary button. A
+   * dashboard full of strong matches then read as a dashboard full of accent,
+   * and the one action that mattered stopped standing out. Scores get their own
+   * ramp; --accent is reserved for brand and interaction.
+   */
+  --score-high: oklch(0.80 0.17 148);
+  --score-mid: oklch(0.82 0.14 95);
+  --score-low: #8a8f98;
+  --score-pending: rgba(255, 255, 255, 0.08);
+
+  /*
+   * Source identity ramp.
+   *
+   * Replaces fourteen hardcoded Tailwind pairs. A source is identified by a 5px
+   * dot rather than a filled pill, so a collector added next month hashes into
+   * the ramp and looks native immediately instead of falling back to grey.
+   */
+  --hue-1: oklch(0.75 0.15 250);
+  --hue-2: oklch(0.75 0.17 300);
+  --hue-3: oklch(0.80 0.17 148);
+  --hue-4: oklch(0.78 0.16 55);
+  --hue-5: oklch(0.75 0.16 350);
+  --hue-6: oklch(0.78 0.13 200);
+  --hue-7: oklch(0.80 0.15 100);
+  --hue-8: oklch(0.72 0.14 20);
+
+  /*
+   * Elevation by light, not shadow. A faint top-down gradient reads as a lit
+   * surface on a near-black canvas where a flat fill reads as a flat patch.
+   */
+  --surface-1: linear-gradient(158deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  --surface-2: linear-gradient(158deg, rgba(255, 255, 255, 0.070), rgba(255, 255, 255, 0.020));
+
+  /* sRGB fallback of --accent, for manifests, OG images and standalone SVG. */
+  --accent-hex: #58e68c;
+
   /* Legacy Tailwind compat */
   --background: #08090a;
   --foreground: #f7f8f8;
@@ -74,6 +114,26 @@
   --color-secondary: var(--bg-secondary);
   --color-secondary-foreground: var(--fg-primary);
   --font-display: var(--font-geist-sans);
+
+  /*
+   * Semantic radii rather than overrides of Tailwind's own scale.
+   *
+   * Redefining --radius-lg would silently resize every rounded-lg on the public
+   * marketing pages too, which are not part of this pass. These are new names,
+   * so `rounded-card` means the same thing everywhere it appears and nothing
+   * outside the dashboard moves.
+   */
+  --radius-chip: 6px;
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --radius-hero: 20px;
+
+  --color-score-high: var(--score-high);
+  --color-score-mid: var(--score-mid);
+  --color-score-low: var(--score-low);
+
+  --color-status-amber: var(--status-amber);
+  --color-status-rose: var(--status-rose);
 }
 
 html {
@@ -574,6 +634,34 @@ body {
   width: 1px;
   background: var(--sc-a);
   box-shadow: 0 0 10px color-mix(in srgb, var(--sc-a) 70%, transparent);
+}
+
+/*
+ * Settings reuses the onboarding step components, which is right — a second
+ * copy of the country picker would drift within a release. But it also drags
+ * the *scene's* intensity onto a page that has no scene: on onboarding the
+ * sweep and the glowing marker are read against a full-bleed tinted field and
+ * one question at a time, whereas Settings stacks four sections of them with
+ * everything already answered, and the page turns solid green.
+ *
+ * `.opt-quiet` is the Settings context. Same rows, same behaviour, dialled back
+ * so the tint reads as "selected" rather than as the subject of the page.
+ * Onboarding is untouched.
+ */
+.opt-quiet .opt-row::before {
+  opacity: 0.45;
+}
+
+.opt-quiet .opt-row[data-selected="true"] {
+  border-bottom-color: var(--border-subtle);
+}
+
+.opt-quiet .opt-marker {
+  box-shadow: none;
+}
+
+.opt-quiet .opt-row[data-selected="true"] .opt-marker {
+  box-shadow: none;
 }
 
 /* ── Option rows — the hertzwerk move: rules, not cards ────── */

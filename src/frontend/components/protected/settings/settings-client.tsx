@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
+import { PageHeader } from "@/frontend/components/ui/page-header";
+import { Button } from "@/frontend/components/ui/button";
+import { Eyebrow, Section } from "@/frontend/components/ui/surface";
 import { signOut } from "@/backend/actions/auth";
 import type { JobField } from "@/frontend/lib/configs/job-titles";
 import type { OnboardingProfile } from "@/backend/lib/onboarding-profile";
@@ -114,28 +116,19 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
   }
 
   return (
-    <div className="min-h-dvh bg-(--bg-canvas)">
-      <header className="border-b border-border-subtle">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-6 px-6 py-5">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-(--fg-tertiary) transition-colors hover:text-(--fg-primary)"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Dashboard
-          </Link>
-          <h1 className="font-mono text-[11px] uppercase tracking-[0.22em] text-fg-quaternary">
-            Settings
-          </h1>
-        </div>
-      </header>
+    <div className="flex-1 overflow-y-auto bg-(--bg-canvas)">
+      <div className="px-6 py-8">
+        <PageHeader
+          breadcrumb={["Dashboard", "Settings"]}
+          title="Settings"
+          backHref="/dashboard"
+        />
 
-      <div className="mx-auto max-w-4xl px-6 py-10">
         {/* Tabs */}
         <nav
           role="tablist"
           aria-label="Settings sections"
-          className="flex gap-1 border-b border-border-subtle"
+          className="-mt-4 flex gap-1 border-b border-border-subtle"
         >
           {TABS.map((t) => (
             <button
@@ -143,9 +136,9 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
               role="tab"
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
-              className={`-mb-px border-b-2 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${
+              className={`-mb-px border-b-2 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
                 tab === t.id
-                  ? "border-(--fg-primary) text-(--fg-primary)"
+                  ? "border-accent text-fg-primary"
                   : "border-transparent text-fg-quaternary hover:text-fg-secondary"
               }`}
             >
@@ -154,9 +147,11 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
           ))}
         </nav>
 
-        <p className="mt-5 text-[13px] text-fg-quaternary">{active.blurb}</p>
+        <p className="mt-5 max-w-[62ch] text-[13px] leading-relaxed text-fg-tertiary">{active.blurb}</p>
 
-        <div role="tabpanel" className="mt-8">
+        {/* `opt-quiet`: see globals.css — tones the onboarding rows down for a
+            page that has no scene behind them. */}
+        <div role="tabpanel" className="opt-quiet mt-8">
           {tab === "matching" && (
             <div className="space-y-12">
               <Section title="Work arrangement">
@@ -228,17 +223,14 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
           {tab === "account" && (
             <div className="space-y-8">
               <div>
-                <p className={LABEL}>Signed in as</p>
+                <Eyebrow>Signed in as</Eyebrow>
                 <p className="mt-2 text-[15px] text-fg-secondary">{email ?? "—"}</p>
               </div>
 
               <form action={signOut}>
-                <button
-                  type="submit"
-                  className="border border-(--status-rose)/40 px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-(--status-rose) transition-colors hover:bg-(--status-rose)/10"
-                >
+                <Button type="submit" variant="danger" size="lg">
                   Sign out
-                </button>
+                </Button>
               </form>
             </div>
           )}
@@ -247,28 +239,32 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
         {/* The account tab has nothing to save — its one action submits itself. */}
         {tab !== "account" && (
           <div className="mt-12 flex items-center gap-4 border-t border-border-subtle pt-6">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2.5 border border-(--sc-a) bg-(--sc-a)/12 px-6 py-3 font-mono text-[11px] uppercase tracking-[0.22em] text-(--fg-primary) transition-all hover:bg-(--sc-a)/22 disabled:cursor-not-allowed disabled:border-border-standard disabled:bg-transparent disabled:text-(--fg-quaternary)"
-            >
-              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {/*
+              Was bordered with `--sc-a` — the onboarding *scene* tint, a
+              variable scoped to that flow's animated colour transitions. It
+              styled this button only by accident of being globally defined, and
+              would have shifted the moment onboarding's palette was touched.
+            */}
+            <Button variant="primary" size="lg" onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "Saving" : "Save changes"}
-            </button>
+            </Button>
 
             {saved && !error && (
               <span
                 role="status"
                 className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-quaternary"
               >
-                <Check className="h-3.5 w-3.5" />
+                <Check className="size-3.5" />
                 Saved · new matches score shortly
               </span>
             )}
 
             {error && (
-              <span role="alert" className="text-sm text-(--status-rose)">
+              <span
+                role="alert"
+                className="rounded-control border border-status-rose/30 bg-status-rose/8 px-4 py-2 text-sm text-status-rose"
+              >
                 {error}
               </span>
             )}
@@ -279,13 +275,4 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
   );
 }
 
-const LABEL = "font-mono text-[10px] uppercase tracking-[0.2em] text-fg-quaternary";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h2 className={`${LABEL} mb-5`}>{title}</h2>
-      {children}
-    </section>
-  );
-}

@@ -1,6 +1,7 @@
 import { Bookmark, BookmarkCheck, Wifi } from "lucide-react";
 import { Job } from "@/frontend/types/dashboard";
-import { sourceColor } from "./data";
+import { Chip } from "@/frontend/components/ui/chip";
+import { sourceHue } from "./data";
 import { ScoreBadge } from "./score-badge";
 
 interface JobCardProps {
@@ -18,31 +19,33 @@ export function JobCard({ job, index, selected, onSelect, onToggleBookmark }: Jo
       tabIndex={0}
       onClick={() => onSelect(job)}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(job)}
-      className={`group relative p-4 rounded-xl border cursor-pointer transition-all duration-150 outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+      className={`group relative cursor-pointer rounded-card border p-4 outline-none transition-[border-color,transform,background] duration-150 focus-visible:ring-2 focus-visible:ring-accent/60 ${
         selected
-          ? "border-accent/40 bg-accent/5"
-          : "border-border-standard bg-white/1 hover:bg-white/3 hover:border-border-strong"
+          ? "border-accent/40 bg-accent/6"
+          : "border-border-subtle bg-(image:--surface-1) hover:-translate-y-px hover:border-border-strong"
       }`}
       style={{ animationDelay: `${index * 35}ms` }}
     >
       {selected && (
-        <div className="absolute left-0 top-3 bottom-3 w-0.5 rounded-r-full bg-accent" />
+        <div className="absolute bottom-3 left-0 top-3 w-0.5 rounded-r-full bg-accent" />
       )}
 
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lg bg-white/5 border border-border-standard flex items-center justify-center text-sm font-semibold shrink-0 group-hover:border-border-strong transition-colors">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-control border border-border-standard bg-white/5 text-sm font-semibold transition-colors group-hover:border-border-strong">
           {job.company[0]}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="font-medium text-(--fg-primary) text-sm leading-snug truncate">{job.title}</h3>
-              <p className="text-xs text-(--fg-tertiary) mt-0.5 truncate">
+              <h3 className="truncate text-sm font-medium leading-snug text-fg-primary">
+                {job.title}
+              </h3>
+              <p className="mt-0.5 truncate text-xs text-fg-tertiary">
                 {job.company}&nbsp;·&nbsp;{job.location}
                 {job.remote && (
                   <span className="ml-1.5 inline-flex items-center gap-0.5 text-accent-text">
-                    <Wifi className="w-3 h-3" /> Remote
+                    <Wifi className="size-3" /> Remote
                   </span>
                 )}
               </p>
@@ -50,28 +53,33 @@ export function JobCard({ job, index, selected, onSelect, onToggleBookmark }: Jo
             <ScoreBadge score={job.score} />
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap mt-2">
-            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${sourceColor(job.source)}`}>
-              {job.source}
-            </span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-border-standard text-(--fg-tertiary) capitalize">
-              {job.type}
-            </span>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <Chip dot={sourceHue(job.source)}>{job.source}</Chip>
+            <Chip className="capitalize">{job.type}</Chip>
             {job.salary && (
-              <span className="text-[11px] text-(--fg-tertiary) font-mono">{job.salary}</span>
+              <span className="font-mono text-[11px] text-fg-tertiary tabular-nums">
+                {job.salary}
+              </span>
             )}
-            <span className="text-[11px] text-fg-quaternary ml-auto">{job.postedAt}</span>
+            <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.12em] text-fg-quaternary">
+              {job.postedAt}
+            </span>
           </div>
         </div>
 
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleBookmark(job.id); }}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-(--fg-tertiary) hover:text-accent transition-colors shrink-0 mt-0.5"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleBookmark(job.id);
+          }}
+          className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-control text-fg-tertiary transition-colors hover:bg-white/5 hover:text-accent"
           title={job.bookmarked ? "Remove bookmark" : "Bookmark"}
         >
-          {job.bookmarked
-            ? <BookmarkCheck className="w-3.5 h-3.5 text-accent" />
-            : <Bookmark className="w-3.5 h-3.5" />}
+          {job.bookmarked ? (
+            <BookmarkCheck className="size-3.5 text-accent" />
+          ) : (
+            <Bookmark className="size-3.5" />
+          )}
         </button>
       </div>
     </div>

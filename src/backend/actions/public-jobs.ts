@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { createClient } from "@/backend/lib/supabase/server";
 import { sanitizeDescription } from "@/backend/lib/html/sanitize-description";
 import { logServerError } from "@/backend/lib/errors";
@@ -89,21 +90,75 @@ function toCard(row: Row): PublicJobCard {
 }
 
 /**
- * The newest listings, for `/jobs`.
+ * The markets this product is for.
+ *
+ * Jobak exists for candidates in MENA, and the public jobs page was showing the
+ * pool in pure recency order — which on a busy collection day is a wall of
+ * remote-worldwide listings with Cairo and Riyadh buried underneath. These
+ * codes drive both the default ordering and the region filter.
+ */
+export const MENA_COUNTRIES = [
+  "EG", "SA", "AE", "KW", "QA", "BH", "OM", "JO", "LB", "IQ",
+  "MA", "TN", "DZ", "LY", "SD", "PS", "SY", "YE", "MR", "SO", "DJ", "KM",
+];
+
+export type RegionFilter = "mena" | "remote" | "all";
+export type WorkplaceFilter = "all" | "remote" | "hybrid" | "onsite";
+
+export interface JobQuery {
+  region?: RegionFilter;
+  workplace?: WorkplaceFilter;
+  search?: string;
+  limit?: number;
+}
+
+/**
+ * The listings for `/jobs`.
  *
  * Ordered by when *we* collected it rather than by `posted_at_source`: a board
  * that backdates or omits its posting date would otherwise sink to the bottom
  * forever, and "new to Jobak" is what this page is actually claiming.
+ *
+ * `region: "mena"` is the default because of who this is for. It matches on the
+ * region FK rather than on the location text — `regions.country_code` is what
+ * the collector resolved, and re-deriving a country from free text here would
+ * repeat work the scraper already did more carefully.
  */
-export const getPublicJobs = cache(async (limit = 60): Promise<PublicJobCard[]> => {
+export const getPublicJobs = cache(async (query: JobQuery = {}): Promise<PublicJobCard[]> => {
+  const { region = "mena", workplace = "all", search = "", limit = 60 } = query;
+
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
+
+    let builder = supabase
       .from("jobs")
       .select(CARD_COLUMNS)
-      .not("public_slug", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+      .not("public_slug", "is", null);
+
+    if (workplace !== "all") builder = builder.eq("job_type", workplace);
+
+    if (search.trim()) {
+      // Escaped: a comma or a parenthesis in the term is PostgREST syntax, and
+      // job titles are full of both — "Mobile Engineer (iOS)" would break it.
+      const term = search.trim().replace(/[,()]/g, " ").slice(0, 80);
+      builder = builder.or(`title.ilike.%${term}%,company.ilike.%${term}%`);
+    }
+
+    if (region === "mena") {
+      const regionIds = await menaRegionIds();
+      /*
+       * Remote roles stay in even on a MENA filter: a remote listing open to
+       * anywhere is available to someone in Cairo, and `region_id` is null on
+       * most of them because the collector had no country to attribute.
+       */
+      if (regionIds.length > 0) {
+        builder = builder.or(`region_id.in.(${regionIds.join(",")}),job_type.eq.remote`);
+      }
+    } else if (region === "remote") {
+      builder = builder.eq("job_type", "remote");
+    }
+
+    const { data, error } = await builder.order("created_at", { ascending: false }).limit(limit);
 
     if (error) {
       logServerError("public-jobs:list", error);
@@ -112,7 +167,31 @@ export const getPublicJobs = cache(async (limit = 60): Promise<PublicJobCard[]> 
 
     return ((data ?? []) as unknown as Row[]).map(toCard);
   } catch (error) {
+    // `cookies()` throws a DynamicServerError during static generation as a
+    // control-flow signal. Handing it back to Next before logging keeps the
+    // build output honest — it was reporting these as errors on every build.
+    unstable_rethrow(error);
     logServerError("public-jobs:list", error);
+    return [];
+  }
+});
+
+/**
+ * `regions.id` for every MENA country, resolved once per request.
+ *
+ * The collector stores geography as `jobs.region_id -> regions(id)`, so a
+ * country filter is an id lookup rather than a string match. Cached because the
+ * list page and any filtered variant of it both need the same answer.
+ */
+const menaRegionIds = cache(async (): Promise<number[]> => {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.from("regions").select("id").in("country_code", MENA_COUNTRIES);
+    return (data ?? []).map((row) => row.id as number);
+  } catch (error) {
+    unstable_rethrow(error);
+    // Without the lookup the page shows everything rather than nothing — a
+    // wider list is a worse page, an empty one is a broken page.
     return [];
   }
 });
@@ -146,6 +225,7 @@ export const getPublicJob = cache(async (slug: string): Promise<PublicJob | null
       companyCareers: company?.careers_url ?? null,
     };
   } catch (error) {
+    unstable_rethrow(error);
     logServerError("public-jobs:detail", error);
     return null;
   }
