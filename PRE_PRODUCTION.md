@@ -1,4 +1,17 @@
-# Pre-production checklist
+# Jobak — pre-production checklist
+
+> **Status, 2026-08-23.** Several sections below predate the scraper rebuild and
+> describe a system that no longer exists — three sources, Apify actors called
+> directly from n8n, `Normalize LinkedIn` / `Normalize Indeed` nodes. Those items
+> are marked **superseded** where they have been overtaken rather than deleted,
+> because the reasoning in them is still the reasoning that applies.
+>
+> Items are split by who can do them:
+>
+> - **`[x]` done in code** — shipped and verified in the repo.
+> - **`[ ] config`** — needs an account, a DNS record or a dashboard nobody but
+>   the owner can reach. No amount of code closes these.
+> - **`[ ] decide`** — a product or legal call, not a task.
 
 Things that must be done or decided before Jobak goes to production. Started
 2026-08-16 while cleaning up the landing page — add to it as more turns up.
@@ -13,11 +26,21 @@ All user-facing copy was scrubbed on 2026-08-16: no third-party job platform is
 named anywhere in the marketing surface, and "scraping" language was replaced with
 neutral collection wording. What is left is not copy — it is the system itself.
 
-- [ ] **Audit every source against its terms of service.** Of the three sources
-      actually implemented, two are legitimate public APIs (RemoteOK, Remotive) and
-      one is HTML parsing (Wuzzuf). Confirm the HTML-parsed source permits automated
-      access, or drop it.
-- [ ] **The `Source` type still names platforms that were never implemented.**
+- [x] **Audit every source against its terms of service.** ✅ Superseded and
+      done properly: `services/scraper/src/lib/robots.ts` gates every outbound
+      request against the host's live `robots.txt`, honours `Crawl-delay`, and
+      fails open only when the file is unreachable. `scripts/robots-probe.ts`
+      checks all 20 URLs the service requests and fails on an unexpected verdict.
+      Turning it on found two violations we were already committing — Remotive's
+      `Disallow: /api/*` and Wikidata's `/w/` — both fixed. The compliance
+      section of `services/scraper/README.md` is now generated from evidence
+      rather than from a one-off audit.
+- [x] **The `Source` type still names platforms that were never implemented.**
+      ✅ Resolved: `Source` is a plain `string` fed from the `sources` table, and
+      the dashboard's filter row is built from the jobs actually on screen. The
+      platforms named in it now genuinely exist. Original note kept below.
+
+      <details><summary>Original</summary>
       `src/frontend/types/dashboard.ts` lists LinkedIn, Indeed and Glassdoor, none of
       which exist in the workflow (`src/backend/actions/jobs.ts` maps only
       1=Wuzzuf, 2=RemoteOK, 3=Remotive). Same fiction in
@@ -25,14 +48,19 @@ neutral collection wording. What is left is not copy — it is the system itself
       hardcoded `SOURCES` list are gone — the filter row is built from the jobs
       on screen, and `sourceColor()` falls back to neutral for unknown names.
       `src/frontend/types/dashboard.ts` still lists platform names in `Source`
-      only as a doc comment now, not a union.
+      only as a doc comment now, not a union.</details>
 - [ ] **Decide whether the signed-in dashboard should show source names at all.**
       Showing where a listing came from is normal attribution and users need it to
       apply, but it is a product/legal call. It is behind auth, so it is not
       advertising — which is why it was left alone rather than changed silently.
 - [ ] **Never re-introduce platform names into public copy.** If a source is added,
       describe it generically ("job platforms").
-- [ ] **Rate-limit the collection workflow** so it cannot hammer any source.
+- [x] **Rate-limit the collection workflow** so it cannot hammer any source.
+      ✅ `services/scraper/src/lib/throttle.ts` — per-host adaptive delay learned
+      from observed latency, `Retry-After` and block statuses, ported from
+      Scrapling's `AutoThrottle`. Starts at zero and only slows on evidence,
+      because this runs in a function with an 18-second budget rather than in a
+      crawler.
 
 ## OAuth configuration (code is done, config is not)
 
@@ -182,7 +210,15 @@ and throttles to 12 checks/minute.
       `AIza`, `gsk_`. If a provider changes its key format, verification starts
       rejecting valid keys before it ever makes the request.
 
-## Apify + workflow v2 (added 2026-08-21)
+## Apify + workflow v2 (added 2026-08-21) — **superseded 2026-08-23**
+
+> Replaced by the Apify marketplace: the actor catalogue, input mapping and
+> output mapping now live in `services/scraper/src/apify/catalogue.ts`, users
+> pick actors in Settings, and `n8n/jobak-collect-apify.json` calls
+> `/api/apify` instead of one hardcoded actor. `scripts/apify-probe.ts`
+> validates every actor's inputs against its published schema **without running
+> anything**. The items below are kept for the reasoning; the node names they
+> refer to no longer exist.
 
 Onboarding takes at least one AI model key; an Apify token is optional and only
 ever spent when the user presses Search on the dashboard.
@@ -196,7 +232,13 @@ ever spent when the user presses Search on the dashboard.
       webhook secret, Supabase URL + service key, actor slugs, rows per source,
       batch size, and the per-provider model ids. The old workflow's webhook path
       is reused, so the app needs no env change — but do not leave both active.
-- [ ] **Confirm the two actors' output field names.** The normalizers read
+- [ ] **Confirm the actors' output field names.** Still open, and still the
+      most expensive failure mode — but now self-diagnosing: `ApifySource`
+      counts rows that map to no title and reports the field names it actually
+      saw in `meta.actors`, so a rename surfaces as a named problem instead of a
+      confident zero that still bills. Original note:
+
+      The normalizers read
       several likely names per field (`jobUrl`/`url`/`link`, …) because actor
       output is not a versioned contract. Run each actor once from the Apify
       console, compare a real dataset row against `Normalize LinkedIn` /
@@ -377,7 +419,12 @@ just a page.
 - [ ] **Status page** — needs uptime monitoring. The hardcoded
       "All systems operational" line was removed from the footer for this reason.
 - [ ] **API docs** — there is no public API for users today.
-- [ ] **Contact page** — needs a support inbox or alias to publish.
+- [x] **Contact page** — ✅ Replaced by `/feedback`, which needs no mailbox:
+      submissions land in the `feedback` table, readable only by the service
+      role. Anonymous senders are allowed on purpose — the people best placed to
+      report a wrong listing are often the ones who left before making an
+      account. A `support@` alias is still worth having for replies, but it no
+      longer blocks anything.
 
 ## Functional gaps
 
@@ -402,3 +449,111 @@ just a page.
 - [ ] **Lint is not clean**: 5 errors / 5 warnings, mostly in
       `src/frontend/components/public/home/_unused/` and `scripts/`. Decide whether
       `_unused/` should be deleted outright.
+
+## Public pages, talent directory, LinkedIn posting (added 2026-08-23)
+
+Migrations, in this order. The app degrades rather than breaks before they run —
+fallback selects keep Settings and the dashboard working — but nothing new
+appears until they do.
+
+- [ ] **config** — `supabase/fix-matching.sql`. The PGRST202 the Search button
+      reports. Also adds the scoring columns that make the AI's reasoning
+      visible.
+- [ ] **config** — `supabase/repair-job-data.sql`. Repairs rows written by the
+      two mapping bugs: `location = '[object Object]'`, and remote listings whose
+      own text says hybrid. **Run the SELECTs at the top first** — they say how
+      much is affected before anything changes.
+- [ ] **config** — `supabase/seed-sources.sql` (re-run). `jobs.source_id` is a
+      FK and a missing row fails the **whole** bulk insert with 23503.
+- [ ] **config** — `supabase/companies.sql`, `supabase/apify-marketplace.sql`.
+- [ ] **config** — `supabase/public-jobs.sql`. Public job pages, `public_slug`,
+      `is_linkedin_posted`, the rotation cursor. **Widens `jobs` and `companies`
+      to anonymous read** — that is the point of the public pages, and
+      `user_job_matches` stays private.
+- [ ] **config** — `supabase/public-profiles.sql`. Read its header first: it is
+      the one file that deliberately opens a public read path, and the
+      `public_talent` view is the security boundary.
+
+Then:
+
+- [ ] **config** — Import `n8n/jobak-post-linkedin.json`, fill `Set Config`, and
+      **execute once with `LIVE = false`**. It logs the exact post text without
+      publishing. Needs a LinkedIn app with the **Community Management API** and
+      `w_organization_social` approved, plus the page's
+      `urn:li:organization:…`. The token is 60-day — when posts stop, check that
+      first.
+- [ ] **config** — Paste a `/jobs/...` URL into LinkedIn's Post Inspector before
+      the first live run, to confirm the Open Graph card renders.
+- [ ] **decide** — The talent directory is `robots: index: false` until it has
+      enough profiles to be worth finding. An indexed page of three real people
+      is worse for them than no listing. Flip it in
+      `src/app/(public)/talent/page.tsx` when it is populated.
+- [ ] **decide** — Seed the directory with willing users before linking it
+      prominently. An empty grid reads as broken.
+
+## AI application documents (added 2026-08-23)
+
+- [x] Provider-agnostic completion layer (`src/backend/lib/ai/complete.ts`),
+      prompts (`documents.ts`), route (`/api/v1/ai/documents`), and UI in both
+      the job drawer and `/dashboard/documents`.
+- [ ] **The throttle is in-memory**, so it resets on deploy and is per-instance —
+      same limitation already recorded for key verification. It stops a stuck
+      loop, not a determined user.
+- [ ] **decide** — Model defaults are per provider in `complete.ts`
+      (`claude-sonnet-5`, `gpt-4o-mini`, `gemini-2.0-flash`,
+      `llama-3.3-70b-versatile`). Cheaper is available; prose quality is the
+      trade. This spends the user's money, so it is their setting to want.
+- [ ] **Pasted CV text is sent to the provider and not stored.** Say so in the
+      privacy copy if a privacy page is ever written — the UI says it, the FAQ
+      does not.
+
+## Arabic localisation — not started
+
+Agreed scope: **UI chrome and RTL only**. Job titles and descriptions stay in
+whatever language the source published them.
+
+- [ ] **decide** — Routing. `/ar/...` path segments are correct for SEO and mean
+      restructuring every route under a `[locale]` segment; a cookie plus
+      `dir="rtl"` avoids the restructure but serves both languages on one URL,
+      which indexes badly. This choice decides the size of the change.
+- [ ] Dictionaries as `messages/en.json` and `messages/ar.json`.
+- [ ] `dir="rtl"` on `<html>`, plus an audit of directional Tailwind utilities
+      (`ml-`, `pl-`, `left-`, `text-left`) for logical equivalents.
+- [ ] A language switcher, and `lang` on `<html>` — currently hardcoded `en` in
+      `src/app/layout.tsx`.
+
+## Feedback and support pages (added 2026-08-24)
+
+- [ ] **config** — Run `supabase/feedback.sql`. Insert-only for `anon` and
+      `authenticated`, and **no SELECT policy at all**: feedback carries names,
+      emails and complaints about named employers, so only the service role
+      reads it.
+- [ ] **There is no in-app inbox.** Read submissions from the SQL editor — the
+      query is at the bottom of that file. Building a triage UI before anyone
+      has sent anything would be building the wrong thing.
+- [ ] **decide** — Where feedback notifications should go. Nothing pings you
+      today; a Supabase database webhook into Slack or email is the small
+      version, and it needs an endpoint to point at.
+
+### Wallets — read before adding one
+
+`supportWallets` in `src/frontend/components/public/shared/footer/data.ts` is
+**empty on purpose**, and both the footer strip and `/support` render nothing
+while it is. That is not an oversight to tidy up: a placeholder tip address that
+ships is money sent to a stranger, discovered only when someone tries it.
+
+- [ ] **config** — Add the BTC and USDT addresses when they exist. The file has
+      the exact shape and a four-step checklist; the short version:
+      - Copy the address out of the wallet app. Never retype it.
+      - `network` must name the **chain**, not the coin. "USDT" is not a
+        network — USDT on TRC-20, ERC-20 and BEP-20 are different chains that
+        share a name, and sending to the wrong one destroys the funds
+        irrecoverably.
+      - Send a test transfer of the smallest possible amount, from a different
+        wallet, and confirm it arrives **before** the address is public.
+      - Use a receive-only address you are content to have indexed forever. This
+        goes on a public page; it will be scraped and it cannot be recalled.
+- [ ] **decide** — Whether to add a fiat option too. Crypto excludes most
+      casual supporters, and Buy Me a Coffee / Ko-fi are a link rather than a
+      code change. `/support` is laid out so a fourth card drops in without a
+      redesign.

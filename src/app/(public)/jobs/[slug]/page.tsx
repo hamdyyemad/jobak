@@ -5,6 +5,7 @@ import { ArrowUpRight, Banknote, Building2, Clock, MapPin, Wifi } from "lucide-r
 import { LinkedInIcon } from "@/frontend/components/shared/brand-icons";
 import { formatPostedAt, getPublicJob } from "@/backend/actions/public-jobs";
 import { isProductionSite } from "@/frontend/lib/configs/site";
+import { JsonLd } from "@/frontend/components/shared/json-ld";
 
 /**
  * One job, readable by anyone.
@@ -107,11 +108,14 @@ export default async function PublicJobPage({ params }: PageProps) {
 
   return (
     <main className="relative min-h-screen overflow-x-hidden noise-overlay">
-      <script
-        type="application/ld+json"
-        // Serialised from values we control, not from user input.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {/*
+        `title`, `company` and `description` come from scraped third-party
+        boards — anyone who can post a listing controls those strings — so this
+        goes through `JsonLd`, which escapes the sequences that can close a
+        script element. An earlier comment here claimed these were values we
+        control. They are not.
+      */}
+      <JsonLd data={jsonLd} />
 
       <section className="relative pt-40 pb-24 lg:pt-48 lg:pb-32">
         <div className="max-w-4xl mx-auto px-6 lg:px-12">
@@ -130,6 +134,11 @@ export default async function PublicJobPage({ params }: PageProps) {
           <p className="text-xl text-muted-foreground mb-8">{job.company}</p>
 
           <div className="flex flex-wrap gap-2 mb-10">
+            {/*
+              Guarded: `jobs.location` held the literal "[object Object]" for
+              sources that publish a structured location, and repaired rows are
+              blank. See supabase/repair-job-data.sql.
+            */}
             {job.location && <Pill icon={MapPin}>{job.location}</Pill>}
             <Pill icon={job.workplace === "remote" ? Wifi : Building2} accent={job.workplace === "remote"}>
               {job.workplace === "onsite" ? "On-site" : job.workplace === "hybrid" ? "Hybrid" : "Remote"}
@@ -210,9 +219,21 @@ export default async function PublicJobPage({ params }: PageProps) {
               dangerouslySetInnerHTML={{ __html: job.description }}
             />
           ) : (
-            <p className="text-muted-foreground">
-              This source publishes no description. Open the listing to read the full posting.
-            </p>
+            <div className="rounded-2xl border border-border-standard bg-white/2 p-6">
+              <p className="text-muted-foreground">
+                {job.source ? `${job.source} lists this role without a description.` : "No description was collected for this role."}{" "}
+                The full posting is on the original listing.
+              </p>
+              <a
+                href={job.applyUrl}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="inline-flex items-center gap-2 mt-4 text-sm text-accent underline underline-offset-2"
+              >
+                Read the full posting
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
           )}
 
           <div className="mt-16 pt-8 border-t border-border-subtle">

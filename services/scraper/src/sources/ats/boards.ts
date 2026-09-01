@@ -1,6 +1,6 @@
 import type { ScrapedJob, SourceDescriptor } from "../../core/types.js";
 import { AtsStrategy, type AtsRow } from "../../strategies/AtsStrategy.js";
-import { clean, inferJobType, pick, toTimestamp } from "../../lib/normalize.js";
+import { clean, inferJobType, pick, resolveJobType, toTimestamp } from "../../lib/normalize.js";
 import { AtsBoardSource } from "./AtsBoard.js";
 
 /**
@@ -74,7 +74,7 @@ export class AshbySource extends AtsBoardSource {
             title: clean(row.title),
             company: clean(row.companyName) || slug,
             location: clean(row.location) || "Not specified",
-            job_type: row.isRemote === true ? "remote" : inferJobType(row.title, row.location, row.employmentType),
+            job_type: resolveJobType(row.isRemote === true, row.title, row.location, row.employmentType),
             description: String(pick(row, ["descriptionPlain", "descriptionHtml"], "")),
             apply_url: clean(pick(row, ["jobUrl", "applyUrl"], "")),
             salary_text: clean(pick(row, ["compensation.compensationTierSummary"], "")) || null,
@@ -116,7 +116,7 @@ export class WorkableSource extends AtsBoardSource {
             title: clean(row.title),
             company: slug,
             location: location || "Not specified",
-            job_type: row.telecommuting === true ? "remote" : inferJobType(row.title, location, row.employment_type),
+            job_type: resolveJobType(row.telecommuting === true, row.title, location, row.employment_type),
             description: String(row.description ?? ""),
             apply_url: clean(pick(row, ["url", "shortlink", "application_url"], "")),
             salary_text: null,

@@ -2,6 +2,7 @@
 
 import { cache } from "react";
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 import { createClient } from "@/backend/lib/supabase/server";
 import { logServerError } from "@/backend/lib/errors";
 
@@ -98,6 +99,8 @@ export const getPublicTalent = cache(async (limit = 120): Promise<TalentCard[]> 
       openTo: Array.isArray(row.open_to) ? row.open_to : null,
     }));
   } catch (error) {
+    // Next's static-generation bail-out is control flow, not a fault.
+    unstable_rethrow(error);
     logServerError("talent:list", error);
     return [];
   }

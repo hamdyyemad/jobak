@@ -2,7 +2,7 @@ import { JobSource } from "../../core/JobSource.js";
 import type { ScrapedJob, SearchContext, SourceDescriptor } from "../../core/types.js";
 import { JsonFeedStrategy } from "../../strategies/JsonFeedStrategy.js";
 import { matchesQuery } from "../../filters/relevance.js";
-import { clean, inferJobType, toTimestamp } from "../../lib/normalize.js";
+import { clean, resolveJobType, toTimestamp } from "../../lib/normalize.js";
 
 type Row = Record<string, unknown>;
 type Payload = { data?: Row[]; links?: { next?: string | null } };
@@ -67,7 +67,7 @@ export class ArbeitnowSource extends JobSource<Row> {
              * signal that would have caught these.
              */
             location: clean(row.location) || (remote ? "Remote" : "Not specified"),
-            job_type: remote ? "remote" : inferJobType(row.title, row.location, row.job_types),
+            job_type: resolveJobType(remote, row.title, row.location, row.job_types),
             description: String(row.description ?? ""),
             apply_url: clean(row.url),
             salary_text: null,

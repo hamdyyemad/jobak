@@ -114,7 +114,7 @@ export function SettingsClient({ catalogue, apifyCatalogue, profile, email }: Se
   }
 
   return (
-    <div className="min-h-dvh bg-(--bg-canvas)">
+    <div className="flex-1 overflow-y-auto bg-(--bg-canvas)">
       <header className="border-b border-border-subtle">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-6 px-6 py-5">
           <Link

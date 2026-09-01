@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, ArrowUpRight, Bookmark, BookmarkCheck, MapPin, Clock, Banknote, Wifi, ExternalLink, CheckCircle2 } from "lucide-react";
+import { X, Bookmark, BookmarkCheck, MapPin, Clock, Banknote, Wifi, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Job } from "@/frontend/types/dashboard";
 import { sourceColor } from "./data";
 import { ScoreBadge } from "./score-badge";
+import { DocumentGenerator } from "@/frontend/components/protected/documents/document-generator";
 
 interface JobDrawerProps {
   job: Job | null;
@@ -148,6 +149,23 @@ function DrawerContent({ job, onClose, onToggleBookmark }: { job: Job; onClose: 
           </div>
         )}
 
+        {/*
+          Apply-with help, in the place someone decides whether to apply. The
+          description is the input, so this sits with it rather than behind
+          another click — and it falls back to the standalone page for the
+          sources that publish no description.
+        */}
+        <div>
+          <SectionLabel>Apply with AI</SectionLabel>
+          <div className="mt-3">
+            <DocumentGenerator
+              jobDescription={stripTags(job.description ?? "")}
+              jobTitle={job.title}
+              company={job.company}
+            />
+          </div>
+        </div>
+
         {/* Description */}
         {job.description && (
           <div>
@@ -233,6 +251,26 @@ function JobDescription({ html }: { html: string }) {
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
+}
+
+/**
+ * The stored description is sanitised HTML; the model wants prose.
+ *
+ * Sending tags would spend the user's tokens on markup and give the model a
+ * worse prompt — and `<li>` boundaries survive as line breaks, which is exactly
+ * the structure a requirements list needs to keep.
+ */
+function stripTags(html: string): string {
+  return html
+    .replace(/<\/(p|li|h[1-6]|blockquote|div)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {

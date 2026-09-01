@@ -4,19 +4,37 @@ import { Globe, MapPin } from "lucide-react";
 import { GitHubIcon, LinkedInIcon } from "@/frontend/components/shared/brand-icons";
 import { getPublicTalent, type TalentCard } from "@/backend/actions/talent";
 import { PageIntro, PageShell } from "@/frontend/components/public/shared/page-intro";
+import { JsonLd } from "@/frontend/components/shared/json-ld";
+
+const TITLE = "Hire developers and designers in MENA";
+const DESCRIPTION =
+  "Candidates across Egypt, Saudi Arabia, the UAE and the wider MENA region who chose to be listed publicly. " +
+  "Every profile here was published by the person it belongs to, with the fields they picked.";
 
 export const metadata: Metadata = {
-  title: "Talent — Jobak",
-  description:
-    "Candidates on Jobak who chose to be listed publicly. Every profile here was published by the person it belongs to.",
+  title: `${TITLE} — Jobak`,
+  description: DESCRIPTION,
+  keywords: [
+    "hire developers MENA", "hire engineers Egypt", "hire developers Saudi Arabia",
+    "MENA talent", "Egypt developers", "remote talent MENA", "مطورين", "توظيف",
+  ],
   alternates: { canonical: "/talent" },
   openGraph: {
     type: "website",
-    title: "Talent — Jobak",
-    description: "Candidates who chose to be listed publicly.",
+    title: TITLE,
+    description: DESCRIPTION,
     url: "/talent",
     siteName: "Jobak",
+    locale: "en_US",
   },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
+  /*
+   * Followed but not indexed while the directory is opt-in and small. An
+   * indexed page of a handful of real people is worse for them and for us than
+   * no listing at all — and search engines rank a thin directory badly anyway.
+   * Flip this to `index: true` once it has enough profiles to be worth finding.
+   */
+  robots: { index: false, follow: true },
 };
 
 /*
@@ -37,8 +55,35 @@ const WORKPLACE_LABEL: Record<string, string> = {
 export default async function TalentPage() {
   const people = await getPublicTalent();
 
+  /*
+   * `ItemList` of `Person` entries — but only the fields already on the public
+   * card. Structured data must never widen what a page discloses; it is the
+   * same consent, in a machine-readable shape.
+   */
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Talent on Jobak",
+    numberOfItems: people.length,
+    itemListElement: people.slice(0, 50).map((person, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      item: {
+        "@type": "Person",
+        name: person.displayName ?? "Jobak member",
+        ...(person.headline ? { jobTitle: person.headline } : {}),
+        ...(person.linkedinUrl ? { sameAs: [person.linkedinUrl] } : {}),
+        ...(person.location ? { address: person.location } : {}),
+      },
+    })),
+  };
+
   return (
     <PageShell>
+      {people.length > 0 && (
+        <JsonLd data={jsonLd} />
+      )}
+
       <PageIntro
         eyebrow="Talent"
         title={
