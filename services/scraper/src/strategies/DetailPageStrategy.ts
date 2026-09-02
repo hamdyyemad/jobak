@@ -1,4 +1,4 @@
-import type { CollectionStrategy, SearchContext, SourceKind } from "../core/types.js";
+import type { CollectionStrategy, SearchContext, SourceKind, Transport } from "../core/types.js";
 import { Budget, mapLimit, tryFetchText } from "../lib/http.js";
 
 export interface DetailPageConfig<TRaw> {
@@ -44,6 +44,9 @@ export interface DetailPageConfig<TRaw> {
     overFetch?: number;
 
     headers?: Record<string, string>;
+
+    /** Which client fetches the detail pages. Defaults to this runtime's `fetch`. */
+    transport?: Transport;
 }
 
 /**
@@ -84,6 +87,7 @@ export class DetailPageStrategy<TRaw> implements CollectionStrategy<TRaw> {
 
             const html = await tryFetchText(url, ctx.signal, {
                 headers: this.config.headers,
+                transport: this.config.transport,
                 timeoutMs: Math.min(this.config.requestTimeoutMs ?? 6_000, budget.remainingMs || 1),
             });
             if (!html) return null;

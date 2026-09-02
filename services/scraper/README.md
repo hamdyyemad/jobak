@@ -100,7 +100,7 @@ several feeds publish "latest N" without dating every row.
 | Key | Kind | Geography | Default | Notes |
 |---|---|---|---|---|
 | `wuzzuf` | detail | EG, SA, AE | on | Sitemap → detail pages. **Carries company website + LinkedIn.** |
-| `bayt` | detail | MENA-wide | **off** | Correct parser, blocked runtime — see below |
+| `bayt` | detail | MENA-wide | stealth | Needs `../browser`; skips itself without it — see below |
 | `talent` | detail | 12 MENA subdomains | on | Aggregator; full `JobPosting` per detail page |
 | `forasna` | html | EG (Arabic) | **off** | `Crawl-delay: 10`; blue-collar pool — see below |
 | `remoteok` | api | remote-only | on | ~100 latest |
@@ -139,20 +139,31 @@ It used to name `sitemap-job-1.xml` directly. That `-1` is Wuzzuf saying it
 intends to shard, and the day it adds a `-2` the hardcoded version would have
 kept working while silently returning half the market.
 
-### Bayt is off, and it is not the parser
+### Bayt needs a different client, not a different parser
 
 Bayt publishes an `ItemList` on search pages and a complete `JobPosting` on
 every detail page. The parser here reads both correctly, verified live.
 
-Cloudflare rejects **this runtime**, not this code. `curl` fetches every Bayt
-URL with a 200; Node's `fetch` gets a 403 "Attention Required" on all of them —
-listing pages, detail pages, even `sitemap.xml` — because undici's TLS
-fingerprint is not a browser's. No header, user-agent or delay changes that; it
-is decided before the request is sent.
+Cloudflare rejects **this runtime**, not this code. Node's `fetch` gets a 403
+"Attention Required" on every path because undici's TLS fingerprint is not a
+browser's, and no header, user-agent or delay changes that — it is decided from
+the ClientHello before a header is read.
 
-Turn it on the day the service has a client that can impersonate a browser
-(curl-impersonate, or a residential proxy that terminates TLS itself). Until
-then it would only burn a timeout.
+`services/browser` is the client that fixes it: obscura's stealth build, whose
+handshake is Chrome's down to the GREASE and the HTTP/2 SETTINGS frame. With it
+deployed, `SCENARIO=mena probe bayt` returns real Cairo and Alexandria backend
+roles through this same parser. Without it, `accepts()` skips the source and
+says so — there is no fallback to plain `fetch`, because that would spend the
+whole budget collecting 403s.
+
+Two things it does not fix. Bayt rate-limits hard regardless of fingerprint —
+six concurrent detail fetches returned 2 of 6 and then 0 of 6 — so the stealth
+path is capped at concurrency 2 and consecutive probe runs returned 8, then 0,
+then 6 jobs. A zero run is normal, which is why this is one source of thirteen
+and not something to depend on. And every measurement was taken from a
+residential in-region IP; a datacenter IP may still be refused on reputation
+alone, so the deployed probe is the acceptance test. See
+`../browser/README.md`.
 
 ### Forasna is off for two honest reasons
 
@@ -438,13 +449,22 @@ refuse it now anyway. See the LinkedIn section above. Apify is the honest answer
 for both sites, and `apify_linkedin` is on by default.
 
 **Cloudflare fingerprints the client, not the request.** Bayt is the case study;
-see above. Nothing in the header-tweaking family fixes it.
+see above. Nothing in the header-tweaking family fixes it — only a different TLS
+stack does, which is what `services/browser` is and why it is a separate
+deployment rather than a dependency.
 
-**No browser.** Everything here is `fetch` plus parsing. Chromium does not fit
-Vercel's bundle limits comfortably and its cold starts eat the function budget.
-The detail-page strategy exists precisely so that client-rendered sites can be
-read without one — by targeting the structured data they publish for search
-engines, which is server-rendered by necessity.
+**Still no browser, and one exception that is not one.** Everything here is
+`fetch` plus parsing. Chromium does not fit Vercel's bundle limits comfortably
+and its cold starts eat the function budget. The detail-page strategy exists
+precisely so that client-rendered sites can be read without one — by targeting
+the structured data they publish for search engines, which is server-rendered by
+necessity.
+
+`services/browser` does not change that. It is a separate container, and the
+call into it (`--dump original`) bypasses obscura's rendering and V8 layers
+entirely: it is an HTTP GET with a Chrome TLS handshake, nothing more. What was
+missing was never a DOM — it was a fingerprint. Rendering is available there if
+a source ever genuinely needs it; none does today.
 
 **Feeds are "latest N", not searchable archives.** None of the remote-board APIs
 support server-side search, so the query is applied here against a few hundred

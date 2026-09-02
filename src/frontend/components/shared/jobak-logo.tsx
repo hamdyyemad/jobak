@@ -26,8 +26,22 @@ interface JobakLogoProps {
  * marketing site, in white on the sidebar, and in black on a light background —
  * the last of which the old mark could not do at all.
  */
+const MARK_SIZE = { sm: 26, md: 32, lg: 40 } as const;
+
+/*
+ * How much of the mark's box sits to the right of the J's stem.
+ *
+ * The stem's outer edge is at x=42 plus half the 7-unit stroke, so 45.5 of 64 —
+ * leaving 28.9% of the box as empty bearing. That gap is why "obak" looked
+ * detached from the J even at `gap: 1px`: it was clearing the SVG's padding,
+ * not the letter. The lockup pulls the text back by that bearing less a small
+ * optical gap, and because it is a *fraction* of the mark size it holds at 26,
+ * 32 and 40px rather than needing a hand-tuned pixel value per size.
+ */
+const TUCK = 0.289 - 0.062;
+
 function LogoMark({ size = "md", className }: { size?: "sm" | "md" | "lg"; className?: string }) {
-  const dim = size === "sm" ? 26 : size === "lg" ? 40 : 32;
+  const dim = MARK_SIZE[size];
   return (
     <svg
       width={dim}
@@ -71,23 +85,14 @@ export function JobakTile({ size = 40, className }: { size?: number; className?:
       className={cn("text-accent", className)}
       aria-hidden="true"
     >
-      <mask id="jobak-tile-mask">
-        <rect x="5" y="5" width="54" height="54" rx="17" fill="#fff" />
-        <path
-          fill="#000"
-          d="M36 12 H44 V34 A12 12 0 0 1 20 34 H28 A4 4 0 0 0 36 34 Z"
-        />
-        <circle cx="26" cy="18" r="4.4" fill="#000" />
-      </mask>
-      <rect
-        x="5"
-        y="5"
-        width="54"
-        height="54"
-        rx="17"
-        fill="currentColor"
-        mask="url(#jobak-tile-mask)"
-      />
+      {/*
+        One evenodd path rather than a <mask>. Two reasons: a mask referenced
+        from inside a <symbol>/<use> silently fails to resolve in some engines
+        (the tile rendered as a solid blob), and a hardcoded mask id collides
+        the moment two of these render on the same page. A hole in a path has
+        neither problem.
+      */}
+      <path fill="currentColor" fillRule="evenodd" d="M22 5 H42 A17 17 0 0 1 59 22 V42 A17 17 0 0 1 42 59 H22 A17 17 0 0 1 5 42 V22 A17 17 0 0 1 22 5 Z M36 12 H44 V34 A12 12 0 0 1 20 34 H28 A4 4 0 0 0 36 34 Z M26 13.6 a4.4 4.4 0 1 0 0 8.8 a4.4 4.4 0 1 0 0 -8.8 Z" />
     </svg>
   );
 }
@@ -95,11 +100,25 @@ export function JobakTile({ size = 40, className }: { size?: number; className?:
 export function JobakLogo({ showText = true, size = "md", href = "/", className }: JobakLogoProps) {
   const textClass = size === "sm" ? "text-[17px]" : size === "lg" ? "text-[28px]" : "text-xl";
 
+  /*
+   * The mark *is* the J, so the wordmark only carries "obak".
+   *
+   * That makes the visible text a non-word, so the accessible name is set on
+   * the wrapper and both halves are hidden from assistive tech — otherwise a
+   * screen reader announces the brand as "obak", and so does anything that
+   * scrapes the link text.
+   */
   const content = (
-    <span className={cn("group flex select-none items-center gap-2.5", className)}>
+    <span
+      role="img"
+      aria-label="Jobak"
+      className={cn("group flex select-none items-center", className)}
+    >
       <LogoMark size={size} />
       {showText && (
         <span
+          aria-hidden="true"
+          style={{ marginLeft: -MARK_SIZE[size] * TUCK }}
           className={cn(
             /*
              * -0.035em rather than Tailwind's `tracking-tight`. The tighter set
@@ -110,7 +129,7 @@ export function JobakLogo({ showText = true, size = "md", href = "/", className 
             textClass
           )}
         >
-          Jobak
+          obak
         </span>
       )}
     </span>

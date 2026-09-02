@@ -27,12 +27,12 @@
   </g>
 
   <!-- Wordmark -->
-  <text x="288" y="94" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="40" font-weight="600" letter-spacing="-1.4" fill="#f7f8f8">Jobak</text>
+  <text x="265.5" y="94" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="40" font-weight="600" letter-spacing="-1.4" fill="#f7f8f8">obak</text>
 
-  <line x1="288" y1="112" x2="880" y2="112" stroke="url(#rule)" stroke-width="1"/>
+  <line x1="233" y1="112" x2="880" y2="112" stroke="url(#rule)" stroke-width="1"/>
 
   <!-- Line -->
-  <text x="288" y="140" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="19" fill="#d0d6e0">Jobs worth applying to, scored against your own profile.</text>
+  <text x="233" y="140" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="19" fill="#d0d6e0">Jobs worth applying to, scored against your own profile.</text>
 
   <!-- Micro-label, right -->
   <g transform="translate(1064, 96)">

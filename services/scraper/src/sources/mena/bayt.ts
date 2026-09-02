@@ -1,5 +1,6 @@
 import type { SearchContext, SourceDescriptor } from "../../core/types.js";
 import { JsonLdBoardSource, slugifyQuery } from "./JsonLdBoard.js";
+import { stealthAvailable } from "../../lib/http.js";
 
 /**
  * Bayt — the Gulf's largest board, and the broadest MENA coverage of any source
@@ -10,20 +11,25 @@ import { JsonLdBoardSource, slugifyQuery } from "./JsonLdBoard.js";
  * an English query against Arabic titles would need a translation step to
  * accomplish nothing the English pages do not already give us.
  *
- * ── Off by default, and it is not the parser ─────────────────────────────
+ * ── On, but only through the stealth transport ───────────────────────────
  *
  * Bayt sits behind Cloudflare, and Cloudflare rejects this runtime rather than
- * this code. `curl` fetches every URL below with a 200; Node's `fetch` gets a
- * 403 "Attention Required" on all of them — listing pages, detail pages, even
- * `sitemap.xml` — because undici's TLS fingerprint is not a browser's. No
- * header, no user-agent and no delay changes that; it is decided before the
- * request is sent.
+ * this code. Node's `fetch` gets a 403 "Attention Required" on every path
+ * because undici's TLS fingerprint is not a browser's, and no header,
+ * user-agent or delay changes that — it is decided before the request is sent.
  *
- * The source is kept because the parser is correct and the structured data is
- * real, verified through curl: this becomes the single best MENA source the day
- * it is given a client that can impersonate a browser (curl-impersonate, or any
- * residential proxy that terminates TLS itself). Until then it would only ever
- * burn a timeout, so it stays off and says why in `/api/sources`.
+ * `services/browser` is the client that fixes it. Verified live: the same three
+ * listing URLs that 403 undici come back at 200 with ~214KB and their
+ * `ItemList` of 30 detail links intact, and a detail page yields a full
+ * `JobPosting` — title, datePosted, employmentType, hiringOrganization and an
+ * `addressCountry` — through the same parser that was already here.
+ *
+ * `enabledByDefault` is `true` because `accepts()` is the real gate: the source
+ * runs only when the transport is actually deployed, and skips itself with a
+ * stated reason when it is not. Leaving it off by default instead would mean
+ * the collector never calls it even on a deployment that *can* reach it — the
+ * failure this whole change exists to end. Without the transport it would spend
+ * its whole budget collecting 403s, which is why there is no fallback.
  */
 
 /** Bayt's own country path segments. Not ISO codes, and not derivable from them. */
@@ -42,8 +48,9 @@ export class BaytSource extends JsonLdBoardSource {
         geo: "country",
         countries: Object.keys(COUNTRY_PATHS),
         language: "en",
-        enabledByDefault: false,
-        note: "Blocked from Node: Cloudflare rejects undici's TLS fingerprint with a 403 on every path. Needs an impersonating client or a proxy.",
+        enabledByDefault: true,
+        transport: "stealth",
+        note: "Cloudflare rejects undici's TLS fingerprint with a 403 on every path, so this routes through services/browser. Skipped unless BROWSER_URL and BROWSER_SECRET are set.",
     };
 
     protected listingUrls(ctx: SearchContext): string[] {
@@ -58,6 +65,23 @@ export class BaytSource extends JsonLdBoardSource {
         const scopes = paths.length > 0 ? [...new Set(paths)] : ["international"];
 
         return scopes.map((scope) => `https://www.bayt.com/en/${scope}/jobs/${query}-jobs/`);
+    }
+
+    /**
+     * Callable only when the client that can reach Bayt exists.
+     *
+     * Named explicitly rather than left to `enabledByDefault` so the skip
+     * carries a reason into `meta.sources` — "no stealth transport" is a
+     * deployment fact someone can act on, where a silent absence is not.
+     */
+    protected accepts(ctx: SearchContext): boolean {
+        return stealthAvailable() && super.accepts(ctx);
+    }
+
+    protected skipReason(ctx: SearchContext): string {
+        return stealthAvailable()
+            ? super.skipReason(ctx)
+            : "no stealth transport — set BROWSER_URL and BROWSER_SECRET (see services/browser)";
     }
 
     protected isDetailUrl(url: string): boolean {
