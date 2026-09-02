@@ -355,17 +355,27 @@ pages that do not exist.
 - [ ] Re-add the Legal column to `src/frontend/components/public/shared/footer/data.ts`
       once these exist.
 
-## Missing static assets
+## Static assets — resolved
 
-`public/` is currently **empty**, but `src/frontend/lib/configs/metadata.ts` references
-all of the following. Every one of these 404s today.
+This was a list of six 404s: `metadata.ts` hand-wrote `<link>` tags at
+`/favicon-16x16.png`, `/apple-touch-icon.png`, `/android-chrome-*.png` and
+`/site.webmanifest`, none of which were ever served, because the files sat in
+`src/app/` where Next only serves its own metadata conventions.
 
-- [ ] `favicon.ico`, `favicon-16x16.png`, `favicon-32x32.png`
-- [ ] `apple-touch-icon.png` (180x180)
-- [ ] `android-chrome-192x192.png`, `android-chrome-512x512.png`
-- [ ] `site.webmanifest`
-- [ ] OpenGraph share image — `openGraph` declares `summary_large_image` on the Twitter
-      card but no image is set anywhere.
+They are now file conventions and generated routes instead, so the framework
+emits the tags and the assets exist at the URLs they claim:
+
+- [x] `src/app/favicon.ico` — tile at 16/32/48
+- [x] `src/app/icon.svg` — the bare mark, `sizes="any"`
+- [x] `src/app/apple-icon.tsx` — the tile, full bleed, 180x180
+- [x] `src/app/manifest.ts` — replaces `site.webmanifest`, names the PNGs in
+      `public/icons/` (192, 512, and a separate maskable 512)
+- [x] `src/app/opengraph-image.tsx` — 1200x630, reused verbatim by
+      `twitter-image.tsx`
+
+The rasters come from `brand/logo/tile.svg` via
+`tsx scripts/icons/generate-icons.ts`. Re-run it when the mark changes — a stale
+icon is invisible until someone installs the app.
 
 ## Metadata to confirm
 

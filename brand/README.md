@@ -100,17 +100,37 @@ rsvg-convert -w 1128 brand/linkedin/company-cover.svg -o company-cover.png
 Export PNGs are deliberately **not** committed — they go stale against the SVG
 and there is no way to tell by looking.
 
-## Still outstanding
+## App icons
 
-`src/app/android-chrome-192x192.png`, `android-chrome-512x512.png`,
-`apple-touch-icon.png`, `favicon-16x16.png`, `favicon-32x32.png` and
-`favicon.ico` still carry the **old** sun-and-horizon badge.
+Generated, not hand-exported:
 
-Of those, only `favicon.ico` is currently served — the rest were referenced by
-URLs that 404'd (see the note in `src/frontend/lib/configs/metadata.ts`), and
-their references have been removed. `icon.svg` and `apple-icon.tsx` now cover
-modern browsers and iOS.
+```bash
+pnpm scripts        # → Icons → 1
+tsx scripts/icons/generate-icons.ts
+```
 
-To finish the job: re-export `favicon.ico` from `logo/tile.svg` at 16/32/48, and
-either delete the unreferenced PNGs or re-export and re-register them in
-`src/app/manifest.ts`.
+It rasterises `logo/tile.svg` into everything that cannot stay SVG, and is the
+only thing that should ever write these files:
+
+| Output | From | Serves |
+| --- | --- | --- |
+| `src/app/favicon.ico` | tile, 16+32+48 | Browser tabs. Keeps the tile's rounding — nothing masks a favicon. |
+| `public/icons/icon-192.png` | tile | Manifest, `purpose: any` |
+| `public/icons/icon-512.png` | tile | Manifest, install prompt and splash |
+| `public/icons/icon-maskable-512.png` | tile inset to 80% on canvas | Manifest, `purpose: maskable` |
+
+The PNGs live in `public/` because only `favicon`, `icon` and `apple-icon` are
+file conventions Next serves out of `src/app/` — the `android-chrome-*.png` and
+`favicon-*.png` files that used to sit there were unreachable at any URL, which
+is why the manifest could not name them. They carried the old sun-and-horizon
+badge for weeks with no way to tell by looking, and have been deleted.
+
+`icon.svg` (the bare mark) and `apple-icon.tsx` (the tile, full bleed) are not
+produced by the script — they are source, and carry the same path data as
+`logo/mark.svg` and `logo/tile.svg`. Keep all four in sync by hand.
+
+**Why the tile and not the mark.** An app icon is always composited onto
+someone else's wallpaper or browser chrome, so it has to supply its own ground.
+The tile is green with the J knocked out as *negative space*, so every raster
+here flattens it onto `#08090a`; left transparent, the J fills with whatever
+sits behind it.
