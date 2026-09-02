@@ -61,6 +61,18 @@ export abstract class JobSource<TRaw = unknown> {
      * request and returns nothing usable, so those get skipped rather than
      * filtered after the fact. Override for anything with a stranger rule.
      */
+    /**
+     * Why `accepts` said no, for `meta.sources`.
+     *
+     * The default covers the ordinary case — wrong geography, wrong work
+     * preference. Override it wherever the answer is a deployment fact rather
+     * than a property of the search, because "not relevant" sends someone
+     * looking in the wrong place for a missing environment variable.
+     */
+    protected skipReason(ctx: SearchContext): string {
+        return "not relevant to this search";
+    }
+
     protected accepts(ctx: SearchContext): boolean {
         const { geo, countries } = this.descriptor;
 
@@ -167,7 +179,7 @@ export abstract class JobSource<TRaw = unknown> {
         if (!this.accepts(ctx)) {
             return {
                 jobs: [],
-                result: { source, ok: true, count: 0, ms: 0, error: "skipped — not relevant to this search" },
+                result: { source, ok: true, count: 0, ms: 0, error: `skipped — ${this.skipReason(ctx)}` },
             };
         }
 

@@ -34,8 +34,8 @@
     <circle cx="25" cy="22" r="5.5" fill="#58e68c"/>
   </g>
 
-  <text x="672" y="176" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="60" font-weight="600" letter-spacing="-2.1" fill="#f7f8f8">Jobak</text>
-  <line x1="672" y1="204" x2="1360" y2="204" stroke="url(#rule)" stroke-width="1"/>
-  <text x="672" y="240" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="24" fill="#d0d6e0">Jobs worth applying to, scored against your own profile.</text>
-  <text x="672" y="276" font-family="'Geist Mono', ui-monospace, monospace" font-size="14" letter-spacing="3" fill="#8a8f98">JOBAK.IO</text>
+  <text x="634" y="176" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="60" font-weight="600" letter-spacing="-2.1" fill="#f7f8f8">obak</text>
+  <line x1="588" y1="204" x2="1360" y2="204" stroke="url(#rule)" stroke-width="1"/>
+  <text x="588" y="240" font-family="Geist, 'Segoe UI', system-ui, sans-serif" font-size="24" fill="#d0d6e0">Jobs worth applying to, scored against your own profile.</text>
+  <text x="588" y="276" font-family="'Geist Mono', ui-monospace, monospace" font-size="14" letter-spacing="3" fill="#8a8f98">JOBAK.IO</text>
 </svg>

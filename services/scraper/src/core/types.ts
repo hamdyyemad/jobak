@@ -141,6 +141,16 @@ export type SourceGeo =
 
 export type SourceKind = "api" | "rss" | "html" | "detail" | "ats" | "apify";
 
+/**
+ * Which client sends this source's requests.
+ *
+ * `fetch` is this runtime, and is right for every source whose origin does not
+ * inspect the TLS handshake. `stealth` routes through `services/browser`, whose
+ * ClientHello is Chrome's — the only thing that gets past Cloudflare's
+ * fingerprint gate, and the reason Bayt is collectable at all.
+ */
+export type Transport = "fetch" | "stealth";
+
 export interface SourceDescriptor {
     key: string;
     label: string;
@@ -157,6 +167,8 @@ export interface SourceDescriptor {
     enabledByDefault: boolean;
     /** Surfaced by /api/sources so a caller knows what it is getting. */
     note?: string;
+    /** Defaults to `fetch`. A source asking for `stealth` skips itself if it is not deployed. */
+    transport?: Transport;
 }
 
 /**

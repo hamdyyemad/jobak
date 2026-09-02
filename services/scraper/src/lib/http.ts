@@ -8,16 +8,37 @@
  * function timeout.
  */
 
+import type { Transport } from "../core/types.js";
 import { isAllowed, robotsFor, RobotsDisallowed } from "./robots.js";
 import { isBlockedStatus, parseRetryAfter, throttle } from "./throttle.js";
 
 export const UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
+/**
+ * The stealth transport: `services/browser`, if it is deployed.
+ *
+ * Both must be set or the transport does not exist, and a source that asked for
+ * it skips itself rather than falling back to `fetch` — falling back would just
+ * spend the timeout collecting 403s, which is the exact failure this replaces.
+ */
+const BROWSER_URL = process.env.BROWSER_URL?.replace(/\/+$/, "");
+const BROWSER_SECRET = process.env.BROWSER_SECRET;
+
+export function stealthAvailable(): boolean {
+    return Boolean(BROWSER_URL && BROWSER_SECRET);
+}
+
 export interface FetchOptions {
     headers?: Record<string, string>;
     /** Per-request cap, independent of the source-wide signal. */
     timeoutMs?: number;
+    /**
+     * Which client sends this request. Defaults to `fetch` — this runtime.
+     *
+     * `stealth` hands it to `services/browser` instead. See `stealthFetch`.
+     */
+    transport?: Transport;
     /** Defaults to GET. Apify actor runs are the only POSTs this service makes. */
     method?: "GET" | "POST";
     body?: string;
@@ -95,6 +116,42 @@ const sleep = (ms: number, signal: AbortSignal) =>
         );
     });
 
+/**
+ * The same request, sent by a client whose TLS handshake is Chrome's.
+ *
+ * Cloudflare decides against undici before a header is read: measured against
+ * tls.peet.ws, this runtime offers a 10-cipher list with no GREASE over
+ * HTTP/1.1, and Bayt answers every path with a 5KB "Attention Required" page.
+ * The browser service presents GREASE, X25519MLKEM768, ALPS/ECH and HTTP/2 —
+ * and Bayt answers it with the 214KB listing and its `ItemList` intact.
+ *
+ * The result is wrapped in a real `Response` so everything downstream — the
+ * throttle, the error shape, the redaction — stays identical to the plain path.
+ * The status is inferred rather than observed: obscura exits 0 whatever the
+ * origin said and prints no status line, so the service reports `blocked`, and
+ * 403 is the status the throttle already backs off from.
+ */
+async function stealthFetch(url: string, signal: AbortSignal, options: FetchOptions): Promise<Response> {
+    const relay = await fetch(`${BROWSER_URL}/fetch`, {
+        signal,
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${BROWSER_SECRET}` },
+        body: JSON.stringify({ url, timeoutMs: options.timeoutMs ?? 20_000, userAgent: UA }),
+    });
+
+    if (!relay.ok) {
+        // The relay's own failure, not the origin's. A 503 here means it is at
+        // its concurrency ceiling, which the throttle should read as a block.
+        return new Response("", { status: relay.status, statusText: `browser service: ${relay.statusText}` });
+    }
+
+    const payload = (await relay.json()) as { blocked: boolean; body: string; error: string | null };
+    if (payload.error) throw new Error(`browser service — ${redact(url)} — ${payload.error}`);
+    return payload.blocked
+        ? new Response(payload.body, { status: 403, statusText: "Blocked" })
+        : new Response(payload.body, { status: 200, statusText: "OK" });
+}
+
 export async function fetchText(url: string, signal: AbortSignal, options: FetchOptions = {}): Promise<string> {
     const host = (() => {
         try {
@@ -134,18 +191,21 @@ export async function fetchText(url: string, signal: AbortSignal, options: Fetch
     const started = Date.now();
 
     try {
-        const res = await fetch(url, {
-            signal: linked,
-            redirect: "follow",
-            method: options.method ?? "GET",
-            body: options.body,
-            headers: {
-                "User-Agent": UA,
-                Accept: "*/*",
-                "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
-                ...options.headers,
-            },
-        });
+        const res =
+            options.transport === "stealth"
+                ? await stealthFetch(url, linked, options)
+                : await fetch(url, {
+                      signal: linked,
+                      redirect: "follow",
+                      method: options.method ?? "GET",
+                      body: options.body,
+                      headers: {
+                          "User-Agent": UA,
+                          Accept: "*/*",
+                          "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+                          ...options.headers,
+                      },
+                  });
 
         if (host && !options.skipRobots) {
             // Latency is the host's own signal about how much load it is under;

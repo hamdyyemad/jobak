@@ -37,7 +37,8 @@ export default function OpengraphImage() {
                     backgroundImage: `radial-gradient(900px 500px at 78% 8%, rgba(88,230,140,0.13), transparent 70%)`,
                 }}
             >
-                <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                {/* No gap: the mark IS the J, so "obak" tucks against its stem. */}
+                <div style={{ display: "flex", alignItems: "center" }}>
                     <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
                         <path
                             d="M42 12 V38 A10 10 0 0 1 22 38"
@@ -50,13 +51,15 @@ export default function OpengraphImage() {
                     </svg>
                     <div
                         style={{
+                            /* -64 * 0.227, the mark's right bearing less an optical gap. */
+                            marginLeft: -14.5,
                             fontSize: 44,
                             fontWeight: 600,
                             letterSpacing: "-0.035em",
                             color: FG,
                         }}
                     >
-                        Jobak
+                        obak
                     </div>
                 </div>
 
