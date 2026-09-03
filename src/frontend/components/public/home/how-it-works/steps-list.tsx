@@ -35,17 +35,17 @@ function StepButton({ step, isActive, onClick }: StepButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left py-8 border-b border-background/10 transition-all duration-500 group ${
+      className={`w-full text-left py-8 border-b border-foreground/10 transition-all duration-500 group ${
         isActive ? "opacity-100" : "opacity-40 hover:opacity-70"
       }`}
     >
       <div className="flex items-start gap-6">
-        <span className="font-display text-3xl text-background/30">{step.number}</span>
+        <span className="font-display text-3xl text-foreground/30">{step.number}</span>
         <div className="flex-1">
           <h3 className="text-2xl lg:text-3xl font-display mb-3 group-hover:translate-x-2 transition-transform duration-300">
             {step.title}
           </h3>
-          <p className="text-background/60 leading-relaxed">{step.description}</p>
+          <p className="text-foreground/60 leading-relaxed">{step.description}</p>
           {isActive && <ProgressBar />}
         </div>
       </div>
@@ -55,8 +55,8 @@ function StepButton({ step, isActive, onClick }: StepButtonProps) {
 
 function ProgressBar() {
   return (
-    <div className="mt-4 h-px bg-background/20 overflow-hidden">
-      <div className="h-full w-full origin-left bg-background progress-bar" />
+    <div className="mt-4 h-px bg-foreground/20 overflow-hidden">
+      <div className="h-full w-full origin-left bg-foreground progress-bar" />
     </div>
   );
 }

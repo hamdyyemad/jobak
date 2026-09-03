@@ -7,7 +7,7 @@ export function FreeSection({ isAuthenticated = false }: { isAuthenticated?: boo
   return (
     <section
       id="cost"
-      className="relative py-24 lg:py-32 bg-foreground text-background overflow-hidden"
+      className="relative py-24 lg:py-32 bg-background text-foreground overflow-hidden"
     >
       <DiagonalPattern>
         <div className="relative z-10 max-w-350 mx-auto px-6 lg:px-12">

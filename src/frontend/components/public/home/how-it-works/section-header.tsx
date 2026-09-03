@@ -6,8 +6,8 @@ export function SectionHeader() {
 
   return (
     <div ref={ref} className="mb-16 lg:mb-24">
-      <span className="inline-flex items-center gap-3 text-sm font-mono text-background/50 mb-6">
-        <span className="w-8 h-px bg-background/30" />
+      <span className="inline-flex items-center gap-3 text-sm font-mono text-foreground/50 mb-6">
+        <span className="w-8 h-px bg-foreground/30" />
         Process
       </span>
       <h2
@@ -17,7 +17,7 @@ export function SectionHeader() {
       >
         Three steps.
         <br />
-        <span className="text-background/50">Your dream job.</span>
+        <span className="text-foreground/50">Your dream job.</span>
       </h2>
     </div>
   );

@@ -8,7 +8,7 @@ interface CodePreviewProps {
 export function CodePreview({ code, activeStep }: CodePreviewProps) {
   return (
     <div className="lg:sticky lg:top-32 self-start">
-      <div className="border border-background/10 overflow-hidden">
+      <div className="border border-foreground/10 overflow-hidden">
         <CodeHeader />
         <CodeContent code={code} activeStep={activeStep} />
         <CodeFooter />
@@ -19,13 +19,13 @@ export function CodePreview({ code, activeStep }: CodePreviewProps) {
 
 function CodeHeader() {
   return (
-    <div className="px-6 py-4 border-b border-background/10 flex items-center justify-between">
+    <div className="px-6 py-4 border-b border-foreground/10 flex items-center justify-between">
       <div className="flex gap-2">
-        <div className="w-3 h-3 rounded-full bg-background/20" />
-        <div className="w-3 h-3 rounded-full bg-background/20" />
-        <div className="w-3 h-3 rounded-full bg-background/20" />
+        <div className="w-3 h-3 rounded-full bg-foreground/20" />
+        <div className="w-3 h-3 rounded-full bg-foreground/20" />
+        <div className="w-3 h-3 rounded-full bg-foreground/20" />
       </div>
-      <span className="text-xs font-mono text-background/40">job-search.json</span>
+      <span className="text-xs font-mono text-foreground/40">job-search.json</span>
     </div>
   );
 }
@@ -40,7 +40,7 @@ function CodeContent({ code, activeStep }: CodeContentProps) {
 
   return (
     <div className="p-8 font-mono text-sm min-h-70">
-      <pre className="text-background/70">
+      <pre className="text-foreground/70">
         {lines.map((line, lineIndex) => (
           <CodeLine
             key={`${activeStep}-${lineIndex}`}
@@ -66,7 +66,7 @@ function CodeLine({ line, lineNumber, lineIndex }: CodeLineProps) {
       className="leading-loose code-line-reveal"
       style={{ animationDelay: `${lineIndex * 80}ms` }}
     >
-      <span className="text-background/20 select-none w-8 inline-block">
+      <span className="text-foreground/20 select-none w-8 inline-block">
         {lineNumber}
       </span>
       <span>{line}</span>
@@ -76,9 +76,9 @@ function CodeLine({ line, lineNumber, lineIndex }: CodeLineProps) {
 
 function CodeFooter() {
   return (
-    <div className="px-6 py-4 border-t border-background/10 flex items-center gap-3">
+    <div className="px-6 py-4 border-t border-foreground/10 flex items-center gap-3">
       <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-      <span className="text-xs font-mono text-background/40">Searching...</span>
+      <span className="text-xs font-mono text-foreground/40">Searching...</span>
     </div>
   );
 }
