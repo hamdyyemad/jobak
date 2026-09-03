@@ -9,10 +9,17 @@ import type { MetadataRoute } from "next";
  * so did every icon it listed. This file convention is served, and Next emits
  * the `<link rel="manifest">` for it automatically.
  *
- * `icon.svg` is the only icon referenced because it is the one asset that is
- * actually current. The checked-in android-chrome PNGs still carry the old
- * sun-and-horizon badge; add them back here once they have been re-exported
- * from the new mark.
+ * The PNGs below live in `public/icons/` rather than `src/app/`. That is not a
+ * style choice: only `favicon`, `icon` and `apple-icon` are file conventions
+ * Next serves out of the app directory, so the `android-chrome-*.png` files
+ * that used to sit there were never reachable at any URL — which is why the
+ * manifest could not reference them and listed `icon.svg` alone. Anything the
+ * manifest names has to be a static file.
+ *
+ * All three are generated from `brand/logo/tile.svg` by
+ * `scripts/icons/generate-icons.ts`. Re-run it when the mark changes; nothing
+ * else regenerates them and a stale icon is invisible until someone installs
+ * the app.
  */
 export default function manifest(): MetadataRoute.Manifest {
     return {
@@ -30,6 +37,21 @@ export default function manifest(): MetadataRoute.Manifest {
                 type: "image/svg+xml",
                 sizes: "any",
                 purpose: "any",
+            },
+            { src: "/icons/icon-192.png", type: "image/png", sizes: "192x192", purpose: "any" },
+            { src: "/icons/icon-512.png", type: "image/png", sizes: "512x512", purpose: "any" },
+            /*
+             * Separate artwork, not the same file relabelled. A launcher crops a
+             * maskable icon to its own shape and guarantees only the inner 80%,
+             * so this one is the tile inset on a full-bleed ground — listing the
+             * plain tile as `maskable` is the common mistake that gets the
+             * corners shaved off.
+             */
+            {
+                src: "/icons/icon-maskable-512.png",
+                type: "image/png",
+                sizes: "512x512",
+                purpose: "maskable",
             },
         ],
     };
