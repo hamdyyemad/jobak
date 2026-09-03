@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — repair matching
--- Run this in your Supabase SQL editor. Safe to re-run.
+-- Applied by the migration runner (pnpm db:migrate). Safe to re-run.
 -- ============================================================
 --
 -- Fixes the PGRST202 the dashboard's Search button reports:
@@ -12,7 +12,7 @@
 -- would only move the error:
 --
 --  1. `match_candidate_jobs` was never applied to the live database. It exists
---     in schema.sql and PRE_PRODUCTION.md still has the unchecked box for it.
+--     in schema.sql and docs/general/PRE_PRODUCTION.md still has the unchecked box for it.
 --
 --  2. The version in schema.sql references `j.country_code`, and there is no
 --     such column — `jobs` carries `region_id` → `regions(id)`. Running it as

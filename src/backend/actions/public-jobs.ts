@@ -8,7 +8,7 @@ import { logServerError } from "@/backend/lib/errors";
  * The job pool, as anyone may see it.
  *
  * Reads with the ordinary anon client, not the service role. That is the point:
- * the "Anyone can read active jobs" policy in `supabase/public-jobs.sql` is what
+ * the "Anyone can read active jobs" policy in `db/supabase/009_public_jobs.sql` is what
  * makes these pages work, so if that policy were ever tightened these pages
  * would go empty rather than quietly keep serving data past a permission change.
  *

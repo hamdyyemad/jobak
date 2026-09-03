@@ -8,7 +8,7 @@
  *
  * The categories live here rather than in the form so the server can validate
  * against the same list the user picked from, and the database `CHECK` in
- * `supabase/feedback.sql` holds the same values a third time. Three copies is
+ * `db/supabase/011_feedback.sql` holds the same values a third time. Three copies is
  * deliberate: the UI offers, the server verifies, the database enforces.
  */
 

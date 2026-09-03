@@ -2,7 +2,7 @@
  * The shape of the job title catalogue, and the pure helpers that read it.
  *
  * The catalogue itself is no longer here. It lives in the `job_fields` and
- * `job_titles` tables — see `supabase/job-catalogue.sql` — because two things
+ * `job_titles` tables — see `db/supabase/004_job_catalogue.sql` — because two things
  * need it and they were reading two different copies: the onboarding dropdown
  * bundled this file, while the hourly collector had to call the app to get at
  * it. One table, both readers, no drift.

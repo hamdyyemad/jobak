@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — phase 2 schema
--- Run this in your Supabase SQL editor, after schema.sql.
+-- Applied in order by the migration runner (pnpm db:migrate), after 001_initial_schema.sql.
 -- ============================================================
 
 -- ── Search queue ────────────────────────────────────────────

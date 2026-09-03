@@ -95,7 +95,7 @@ locally, and put it back afterwards.
 `05-reset-password.html` links to `/reset-password`, **which does not exist yet**.
 `/forgot-password` is also still a stub (`// TODO: wire up auth`) and never calls
 `resetPasswordForEmail`, so nothing sends this email today. The template is ready
-for when that flow is built. See PRE_PRODUCTION.md.
+for when that flow is built. See docs/general/PRE_PRODUCTION.md.
 
 ## Editing notes
 

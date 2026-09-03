@@ -151,4 +151,14 @@ POST /webhook/job-search
 
 ---
 
+## 📚 Documentation
+
+- [`docs/general/PROJECT_OVERVIEW.md`](docs/general/PROJECT_OVERVIEW.md) — architecture, tech stack, and feature-by-feature implementation notes.
+- [`docs/general/PRE_PRODUCTION.md`](docs/general/PRE_PRODUCTION.md) — the pre-launch checklist: what's done, what needs config, and what's still a product decision.
+- [`docs/frontend/DESIGN_SYSTEM.md`](docs/frontend/DESIGN_SYSTEM.md) — the visual language and design tokens.
+- [`db/README.md`](db/README.md) — database migrations, one subfolder per database.
+- [`docs/general/scripts/README.md`](docs/general/scripts/README.md) — the project scripts CLI (`pnpm scripts`).
+
+---
+
 > **Note:** The priority for V1 is keeping the onboarding structured but simple, starting with 2-3 reliable, terms-compliant job sources before scaling, and prioritizing the *quality* of AI job matches over raw quantity.

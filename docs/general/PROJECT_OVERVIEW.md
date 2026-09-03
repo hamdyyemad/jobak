@@ -684,7 +684,7 @@ jobak/
 
 ### Phase 2: Backend Integration (✅ Completed)
 - [x] Supabase project setup
-  - [x] Database schema design (`supabase/schema.sql`)
+  - [x] Database schema design (`db/supabase/001_initial_schema.sql`)
   - [x] Tables: sources, regions, jobs, user_preferences, user_job_matches
   - [x] Row-level security policies (RLS enabled on all tables)
   - [x] Database functions and triggers (updated_at trigger)
@@ -874,7 +874,7 @@ pnpm dev
 
 2. **Run the database schema**:
    - Open the Supabase SQL Editor
-   - Copy and paste the entire contents of `supabase/schema.sql`
+   - Copy and paste the entire contents of `db/supabase/001_initial_schema.sql`
    - Execute the SQL
 
    The schema includes:

@@ -198,7 +198,7 @@ export default async function PublicJobsPage({ searchParams }: PageProps) {
                 {/*
                   Guarded because `jobs.location` held the literal string
                   "[object Object]" for the sources that publish a structured
-                  location — see supabase/repair-job-data.sql. Repaired rows are
+                  location — see db/supabase/013_repair_job_data.sql. Repaired rows are
                   blank, and a blank location should render as nothing at all.
                 */}
                 {job.location && (

@@ -4,7 +4,7 @@ Source files for anything that leaves the product — social profiles, posts, ap
 icons. Everything here is SVG so it stays editable and exports at any size.
 
 The design system these follow is documented in
-[`docs/DESIGN_SYSTEM.md`](../docs/DESIGN_SYSTEM.md).
+[`docs/frontend/DESIGN_SYSTEM.md`](../docs/frontend/DESIGN_SYSTEM.md).
 
 ## Palette
 

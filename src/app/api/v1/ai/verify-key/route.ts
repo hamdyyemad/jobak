@@ -14,7 +14,7 @@ import { logServerError } from "@/backend/lib/errors";
 /**
  * Per-user throttle. In memory, so it resets on deploy and is per-instance —
  * enough to stop a tight loop from one session, not a substitute for the real
- * rate limiting tracked in PRE_PRODUCTION.md.
+ * rate limiting tracked in docs/general/PRE_PRODUCTION.md.
  */
 const MAX_CHECKS = 12;
 const WINDOW_MS = 60_000;

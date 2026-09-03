@@ -48,6 +48,16 @@ Manage API key encryption using AES-256-GCM
 - Decrypt an encrypted value
 - Run encryption test
 
+### 🗄️ Database
+Run SQL migrations against a project database (e.g. Supabase). See
+[`db/MIGRATION.md`](db/MIGRATION.md) for the full runner docs.
+
+### 🌍 Countries
+Regenerate the country list and flag assets
+
+### 🖼️ Icons
+Re-export favicon.ico and the manifest PNGs from the brand mark
+
 ## Adding New Functionalities
 
 Adding a new script category is simple and requires **NO changes to cli.ts**!

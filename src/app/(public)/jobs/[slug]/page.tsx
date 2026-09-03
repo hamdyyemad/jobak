@@ -137,7 +137,7 @@ export default async function PublicJobPage({ params }: PageProps) {
             {/*
               Guarded: `jobs.location` held the literal "[object Object]" for
               sources that publish a structured location, and repaired rows are
-              blank. See supabase/repair-job-data.sql.
+              blank. See db/supabase/013_repair_job_data.sql.
             */}
             {job.location && <Pill icon={MapPin}>{job.location}</Pill>}
             <Pill icon={job.workplace === "remote" ? Wifi : Building2} accent={job.workplace === "remote"}>

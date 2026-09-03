@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak Database Schema
--- Run this in your Supabase SQL editor
+-- Applied first by the migration runner (pnpm db:migrate).
 -- ============================================================
 
 -- ── Sources ─────────────────────────────────────────────────
@@ -370,7 +370,7 @@ BEGIN
        * Geography is region_id -> regions(id). This used to read
        * `j.country_code`, a column that has never existed on `jobs`, so the
        * function could be created and then failed on every call. See
-       * supabase/fix-matching.sql.
+       * db/supabase/012_fix_matching.sql.
        *
        * `region_id IS NULL` passes deliberately: it is null on everything the
        * collector could not attribute, and `getUserJobs` keeps those rows too.

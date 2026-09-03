@@ -16,7 +16,7 @@ import { logServerError } from "@/backend/lib/errors";
  *
  * The scheduled collectors used to call this too. They now call the Postgres
  * functions `collect_targets_public()` and `collect_targets_private()` instead
- * — see `supabase/collect-targets-rpc.sql`. Everything those need (catalogue,
+ * — see `db/supabase/007_collect_targets_rpc.sql`. Everything those need (catalogue,
  * cursor, preferences) was already in the database, so the round trip through a
  * serverless function bought nothing but a timeout risk. Keeping a second copy
  * of that logic here would be the same drift that has broken this pipeline
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
         const BASE = "user_id, job_titles, location, work_preference, apify_key_encrypted";
 
         /*
-         * `apify_actors` arrives with supabase/apify-marketplace.sql. Until it
+         * `apify_actors` arrives with db/supabase/008_apify_marketplace.sql. Until it
          * does, selecting it fails the query and this endpoint reports "no such
          * user" — which stops Apify collection entirely rather than falling
          * back to the catalogue defaults.

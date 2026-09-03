@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — feedback
--- Run this in your Supabase SQL editor, after schema.sql. Safe to re-run.
+-- Applied in order by the migration runner (pnpm db:migrate). Safe to re-run.
 -- ============================================================
 --
 -- A public form, so anyone can report a broken listing or ask for something

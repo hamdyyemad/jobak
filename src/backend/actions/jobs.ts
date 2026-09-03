@@ -56,7 +56,7 @@ interface PoolRow {
  * The user's match rows, tolerating a database that has not been migrated yet.
  *
  * `match_reason`, `scored_at` and `tech_stack` arrive with
- * `supabase/fix-matching.sql`. Selecting a column PostgREST does not know about
+ * `db/supabase/012_fix_matching.sql`. Selecting a column PostgREST does not know about
  * fails the whole query, which would empty the dashboard for anyone who has not
  * run it — a worse outcome than losing the two fields those columns feed. So
  * the richer select is tried first and the original one is the fallback.
@@ -75,7 +75,7 @@ async function readMatches(
   if (!full.error) return { data: full.data as Record<string, unknown>[] | null };
 
   console.warn(
-    "getUserJobs: user_job_matches is missing the scoring columns — run supabase/fix-matching.sql. " +
+    "getUserJobs: user_job_matches is missing the scoring columns — run db/supabase/012_fix_matching.sql. " +
       "Falling back: scores still show, but there is no way to tell an unscored job from a zero."
   );
 

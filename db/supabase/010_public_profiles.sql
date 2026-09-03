@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — the opt-in public talent directory
--- Run this in your Supabase SQL editor, after schema.sql. Safe to re-run.
+-- Applied in order by the migration runner (pnpm db:migrate). Safe to re-run.
 -- ============================================================
 --
 -- A public page of candidate cards linking to their LinkedIn, for people who

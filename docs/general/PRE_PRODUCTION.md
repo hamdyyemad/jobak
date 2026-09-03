@@ -173,7 +173,7 @@ instead of Groq alone. `user_preferences` had to change shape to match, so **the
 new columns must exist before the reworked onboarding can save anything** — the
 upsert fails outright without them.
 
-- [ ] **Run the migration block at the bottom of `supabase/schema.sql`** against
+- [ ] **Run the migration block at the bottom of `db/supabase/001_initial_schema.sql`** against
       any database that already exists. It converts `work_preference` from TEXT
       to TEXT[], adds `job_titles`, `ai_providers` and `ai_keys_encrypted`,
       carries existing Groq keys into the new map, and rewrites `location` to
@@ -223,7 +223,7 @@ and throttles to 12 checks/minute.
 Onboarding takes at least one AI model key; an Apify token is optional and only
 ever spent when the user presses Search on the dashboard.
 
-- [ ] **Run the Apify migration** at the bottom of `supabase/schema.sql`. It adds
+- [ ] **Run the Apify migration** at the bottom of `db/supabase/001_initial_schema.sql`. It adds
       `user_preferences.apify_key_encrypted`, seeds sources 4 and 5, and adds a
       unique constraint on `regions.country_code`. It also **resets
       `onboarding_completed` to false** for anyone who onboarded before Apify was
@@ -275,27 +275,27 @@ collectors fill for everyone; `user_job_matches` is the per-user scored subset
 the dashboard reads. Four workflows in `n8n/`, replacing the single
 `jobak-job-search-v2.json`, which has been deleted.
 
-- [ ] **Run the SQL, in this order.** `supabase/schema.sql` was only partly
+- [ ] **Run the SQL, in this order.** `db/supabase/001_initial_schema.sql` was only partly
       applied to the live database, which is where the `country_code`,
       `SOURCE_IDS` and `collection_runs` failures came from. There is no
       `jobs.country_code` — geography is `jobs.region_id` → `regions(id)`.
-      1. `collection_runs` from `supabase/schema.sql`
-      2. `supabase/seed-regions.sql` — all 246 countries
-      3. `supabase/seed-sources.sql` — every collector, free and Apify
-      4. `supabase/phase-2-schema.sql` — queue, marketing, cursor, match unique key
-      5. `supabase/job-catalogue.sql` — 13 fields / 95 titles
-      6. `supabase/fix-matching.sql` — **`match_candidate_jobs` + the scoring
+      1. `collection_runs` from `db/supabase/001_initial_schema.sql`
+      2. `db/supabase/003_seed_regions.sql` — all 246 countries
+      3. `db/supabase/002_seed_sources.sql` — every collector, free and Apify
+      4. `db/supabase/005_phase2_schema.sql` — queue, marketing, cursor, match unique key
+      5. `db/supabase/004_job_catalogue.sql` — 13 fields / 95 titles
+      6. `db/supabase/012_fix_matching.sql` — **`match_candidate_jobs` + the scoring
          columns.** This is the PGRST202 the Search button reports. Note it
          supersedes the copy in `schema.sql`, which referenced a
          `jobs.country_code` that has never existed and so could be created but
          never called.
-      7. `supabase/companies.sql` — company links cache + `jobs.company_id`
-      8. `supabase/apify-marketplace.sql` — `user_preferences.apify_actors`
-      9. `supabase/public-jobs.sql` — public job pages, `is_linkedin_posted`,
+      7. `db/supabase/006_companies.sql` — company links cache + `jobs.company_id`
+      8. `db/supabase/008_apify_marketplace.sql` — `user_preferences.apify_actors`
+      9. `db/supabase/009_public_jobs.sql` — public job pages, `is_linkedin_posted`,
          the posting cursor and `next_linkedin_posts()`. **Widens `jobs` and
          `companies` to anonymous read** — that is the point of the public
          pages, and `user_job_matches` stays private.
-      10. `supabase/public-profiles.sql` — the opt-in talent directory. Read the
+      10. `db/supabase/010_public_profiles.sql` — the opt-in talent directory. Read the
           header before running it: it is the one file that deliberately opens a
           public read path, and the `public_talent` view is the security
           boundary.
@@ -466,21 +466,21 @@ Migrations, in this order. The app degrades rather than breaks before they run �
 fallback selects keep Settings and the dashboard working — but nothing new
 appears until they do.
 
-- [ ] **config** — `supabase/fix-matching.sql`. The PGRST202 the Search button
+- [ ] **config** — `db/supabase/012_fix_matching.sql`. The PGRST202 the Search button
       reports. Also adds the scoring columns that make the AI's reasoning
       visible.
-- [ ] **config** — `supabase/repair-job-data.sql`. Repairs rows written by the
+- [ ] **config** — `db/supabase/013_repair_job_data.sql`. Repairs rows written by the
       two mapping bugs: `location = '[object Object]'`, and remote listings whose
       own text says hybrid. **Run the SELECTs at the top first** — they say how
       much is affected before anything changes.
-- [ ] **config** — `supabase/seed-sources.sql` (re-run). `jobs.source_id` is a
+- [ ] **config** — `db/supabase/002_seed_sources.sql` (re-run). `jobs.source_id` is a
       FK and a missing row fails the **whole** bulk insert with 23503.
-- [ ] **config** — `supabase/companies.sql`, `supabase/apify-marketplace.sql`.
-- [ ] **config** — `supabase/public-jobs.sql`. Public job pages, `public_slug`,
+- [ ] **config** — `db/supabase/006_companies.sql`, `db/supabase/008_apify_marketplace.sql`.
+- [ ] **config** — `db/supabase/009_public_jobs.sql`. Public job pages, `public_slug`,
       `is_linkedin_posted`, the rotation cursor. **Widens `jobs` and `companies`
       to anonymous read** — that is the point of the public pages, and
       `user_job_matches` stays private.
-- [ ] **config** — `supabase/public-profiles.sql`. Read its header first: it is
+- [ ] **config** — `db/supabase/010_public_profiles.sql`. Read its header first: it is
       the one file that deliberately opens a public read path, and the
       `public_talent` view is the security boundary.
 
@@ -534,7 +534,7 @@ whatever language the source published them.
 
 ## Feedback and support pages (added 2026-08-24)
 
-- [ ] **config** — Run `supabase/feedback.sql`. Insert-only for `anon` and
+- [ ] **config** — Run `db/supabase/011_feedback.sql`. Insert-only for `anon` and
       `authenticated`, and **no SELECT policy at all**: feedback carries names,
       emails and complaints about named employers, so only the service role
       reads it.

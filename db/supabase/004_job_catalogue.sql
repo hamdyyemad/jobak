@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — job title catalogue
--- Run this in your Supabase SQL editor.
+-- Applied in order by the migration runner (pnpm db:migrate).
 -- ============================================================
 --
 -- The controlled vocabulary the onboarding dropdown offers, and the list the

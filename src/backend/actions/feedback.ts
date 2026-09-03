@@ -9,7 +9,7 @@ import { isFeedbackCategory, MESSAGE_MAX, MESSAGE_MIN } from "@/frontend/lib/con
  * Receiving feedback from a public form.
  *
  * Written with the ordinary anon client, not the service role. The
- * "Anyone can submit feedback" policy in `supabase/feedback.sql` is what allows
+ * "Anyone can submit feedback" policy in `db/supabase/011_feedback.sql` is what allows
  * the insert, and its `WITH CHECK` pins `status` and `user_id` — so a bug in
  * this file cannot mark a submission done or attribute it to someone else.
  * Using the service role here would silently discard both guarantees.

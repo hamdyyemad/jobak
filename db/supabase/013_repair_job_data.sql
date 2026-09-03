@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — repair job rows written by the two mapping bugs
--- Run this in your Supabase SQL editor. Safe to re-run.
+-- Applied by the migration runner (pnpm db:migrate). Safe to re-run.
 -- ============================================================
 --
 -- The code fixes in services/scraper only affect *future* collections. These

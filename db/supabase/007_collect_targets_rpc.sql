@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — collection targets, as database functions
--- Run this in your Supabase SQL editor, after job-catalogue.sql.
+-- Applied in order by the migration runner (pnpm db:migrate), after 004_job_catalogue.sql.
 -- ============================================================
 --
 -- The collectors used to ask the app what to collect. That made sense while the

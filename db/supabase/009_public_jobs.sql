@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — public job pages, and the LinkedIn posting queue
--- Run this in your Supabase SQL editor, after schema.sql. Safe to re-run.
+-- Applied in order by the migration runner (pnpm db:migrate). Safe to re-run.
 -- ============================================================
 --
 -- Two things at once, because they are the same feature:

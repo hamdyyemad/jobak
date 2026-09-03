@@ -38,7 +38,7 @@ export async function getOnboardingProfile(): Promise<OnboardingProfile | null> 
         "work_preference, location, field, skills, experience, job_types, job_titles, seniority, ai_providers, ai_keys_encrypted, apify_key_encrypted, onboarding_completed";
 
     /*
-     * `apify_actors` arrives with supabase/apify-marketplace.sql. Selecting a
+     * `apify_actors` arrives with db/supabase/008_apify_marketplace.sql. Selecting a
      * column PostgREST does not know about fails the whole query, and a failed
      * query here reads as "no profile" — which bounces a fully onboarded user
      * back into onboarding. So the richer select is tried first and the

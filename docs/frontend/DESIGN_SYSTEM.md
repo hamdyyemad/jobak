@@ -1,8 +1,8 @@
 # Jobak design system
 
 The visual language every signed-in page follows. Tokens live in
-[`src/app/globals.css`](../src/app/globals.css); the components that consume
-them live in [`src/frontend/components/ui/`](../src/frontend/components/ui/).
+[`src/app/globals.css`](../../src/app/globals.css); the components that consume
+them live in [`src/frontend/components/ui/`](../../src/frontend/components/ui/).
 
 > **Visual reference:**
 > **[Jobak Design Direction](https://claude.ai/code/artifact/7012da4e-7d23-45be-a954-c0d948571ac1)**
@@ -70,7 +70,7 @@ longer drowns out the one button on it. The thresholds are 80/60 — the drawer
 used to use 90/75, so an 82 read green in the list and neutral once opened.
 
 **Source hues** — `--hue-1` … `--hue-8`. Resolved through `sourceHue()` in
-[`dashboard/data.ts`](../src/frontend/components/protected/dashboard/data.ts);
+[`dashboard/data.ts`](../../src/frontend/components/protected/dashboard/data.ts);
 known sources are pinned, anything new hashes into the ramp. Rendered as a 5px
 dot, never as a filled pill.
 
@@ -231,4 +231,4 @@ Settings, and the shell.
   They were restyled to the system so they cannot drift, but they duplicate
   live code and should be deleted in a behavioural pass.
 - The raster favicons still carry the old mark. See
-  [`brand/README.md`](../brand/README.md).
+  [`brand/README.md`](../../brand/README.md).

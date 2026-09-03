@@ -1,6 +1,6 @@
 -- ============================================================
 -- Jobak — Apify actor selection
--- Run this in your Supabase SQL editor, after schema.sql. Safe to re-run.
+-- Applied in order by the migration runner (pnpm db:migrate). Safe to re-run.
 -- ============================================================
 --
 -- Which collection actors a user has switched on.

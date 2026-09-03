@@ -49,7 +49,7 @@ Whether a configured source is *worth calling* is the source's own `accepts()`,
 so a skip shows up in `meta.sources` with a reason instead of vanishing.
 
 Adding a board is a descriptor, a mapper, one line in `src/sources/index.ts`,
-and a row in `supabase/seed-sources.sql`.
+and a row in `db/supabase/002_seed_sources.sql`.
 
 ### Registration order is load-bearing
 
@@ -240,7 +240,7 @@ page.
 Separate from `/api/scrape` because resolving one company costs up to three
 outbound requests, and because the answer changes on a different clock: a
 company's website changes roughly never, its open roles change hourly. Cache the
-result in `companies` (see `supabase/companies.sql`) and never ask twice.
+result in `companies` (see `db/supabase/006_companies.sql`) and never ask twice.
 
 The chain is tiered by evidence, costs nothing, and only the last step can be
 wrong:
@@ -418,9 +418,9 @@ through `dompurify` in the client component instead.
 
 ## Wiring it up
 
-1. Run `supabase/seed-sources.sql` — `jobs.source_id` is a FK, and a source the
+1. Run `db/supabase/002_seed_sources.sql` — `jobs.source_id` is a FK, and a source the
    table does not know about fails the **whole** bulk insert with 23503.
-2. Run `supabase/companies.sql` for the enrichment cache and `jobs.company_id`.
+2. Run `db/supabase/006_companies.sql` for the enrichment cache and `jobs.company_id`.
 3. In each n8n workflow's `Set Config` node, fill the `ATS` slug list — it ships
    empty, which is why the highest-quality sources had never returned a row.
 4. To populate company links, add a step after `Insert Jobs (bulk)`:

@@ -16,7 +16,7 @@ export type FooterColumn =
 /**
  * Only pages that actually exist are linked here. Anything that needs a feature
  * we have not built (blog, careers, status page, public API docs) stays out until
- * it does — see PRE_PRODUCTION.md for what is still outstanding.
+ * it does — see docs/general/PRE_PRODUCTION.md for what is still outstanding.
  */
 export const footerColumns: FooterColumn[] = [
     {
